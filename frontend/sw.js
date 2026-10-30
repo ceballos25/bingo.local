@@ -1,6 +1,6 @@
 /* Service worker PWA — shell + push */
-const CACHE = 'bingo-shell-v232';
-const ASSET_V = '232';
+const CACHE = 'bingo-shell-v233';
+const ASSET_V = '233';
 const SHELL = [
   './',
   './index.html',
@@ -44,6 +44,23 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+function networkFirst(req, fallbackUrl) {
+  return fetch(req)
+    .then((res) => {
+      if (res && res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(req, clone));
+      }
+      return res;
+    })
+    .catch(() =>
+      caches.match(req).then((cached) => {
+        if (cached) return cached;
+        return fallbackUrl ? caches.match(fallbackUrl) : undefined;
+      })
+    );
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -60,22 +77,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // JS/CSS de la app: red primero (evita módulos ES viejos sin exports nuevos)
-  if (url.pathname.includes('/app/js/') || url.pathname.includes('/app/css/')) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res && res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, clone));
-          }
-          return res;
-        })
-        .catch(() => caches.match(req))
-    );
+  // HTML / navegación: SIEMPRE red primero (si no, F5 no refresca la app)
+  const esHtml =
+    req.mode === 'navigate' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('/app') ||
+    url.pathname.endsWith('/app/') ||
+    url.pathname === '/app' ||
+    /\/app\/?$/.test(url.pathname);
+
+  if (esHtml) {
+    event.respondWith(networkFirst(req, './index.html'));
     return;
   }
 
+  // JS/CSS de la app: red primero
+  if (url.pathname.includes('/app/js/') || url.pathname.includes('/app/css/')) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
+
+  // Resto (iconos, manifest): caché con actualización en segundo plano
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetched = fetch(req)
@@ -86,7 +108,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached || caches.match('./index.html'));
+        .catch(() => cached);
       return cached || fetched;
     })
   );

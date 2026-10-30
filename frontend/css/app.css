@@ -206,7 +206,9 @@ body.app-shell {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  /* allow: permite pull-to-refresh / recarga en móviles */
+  overscroll-behavior-y: auto;
+  overscroll-behavior-x: none;
   /* Hueco para el dock fijo (móvil) */
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
