@@ -84,7 +84,14 @@ final class Pago
             );
         }
 
-        if ($monto <= 0) {
+        // Bingo gratis: monto 0. Resto de canales exige cobro.
+        if ($canal === 'gratis') {
+            if ($monto < 0) {
+                throw new DomainException(
+                    'El monto no puede ser negativo.'
+                );
+            }
+        } elseif ($monto <= 0) {
             throw new DomainException(
                 'El monto debe ser mayor que cero.'
             );

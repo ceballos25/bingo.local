@@ -151,15 +151,10 @@ final class VentaService
                 );
             }
 
-            if ((float) $contexto['monto'] > 0) {
-                throw new DomainException(
-                    'Esta partida no es gratis; debes pagar el cartón.'
-                );
-            }
-
             $carton = $contexto['carton'];
             $carton->vender($contexto['jugadorId']);
 
+            // Monto siempre 0: la partida ya pasó asegurarPartidaGratis().
             $pago = new Pago(
                 $contexto['organizacionId'],
                 $contexto['partidaId'],
