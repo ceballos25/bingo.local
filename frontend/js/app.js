@@ -258,7 +258,7 @@ async function route() {
         await renderMesaClientes(view);
         return;
       }
-      if (section === 'organizacion') {
+      if (section === 'organizacion' || section === 'organizaciones') {
         await renderMesaOrganizacion(view);
         return;
       }

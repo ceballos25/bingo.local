@@ -534,8 +534,9 @@ try {
         exit;
     }
 
-    // 11. Crear una organización mediante POST (bootstrap / alta SaaS).
+    // 11. Crear una organización mediante POST (alta SaaS · solo admin).
     if ($esOrganizaciones && $method === 'POST' && $action === 'crear') {
+        $auth_guard->exigir($rolesAdmin);
         $organizacion_controller->crear();
         exit;
     }
@@ -573,7 +574,11 @@ try {
             exit;
         }
 
-        if ($id !== AuthContext::organizacionId()) {
+        // Admin puede consultar cualquier tenant; mesa/jugador solo la propia.
+        if (
+            $id !== AuthContext::organizacionId()
+            && AuthContext::rol() !== 'administrador'
+        ) {
             http_response_code(404);
             echo json_encode([
                 'error' => 'Organización no encontrada.',
@@ -585,7 +590,7 @@ try {
         exit;
     }
 
-    // 14. Actualizar una organización mediante PUT.
+    // 14. Actualizar una organización mediante PUT (admin · cualquier tenant).
     if ($esOrganizaciones && $method === 'PUT' && $action === 'actualizar') {
         $auth_guard->exigir($rolesAdmin);
         $id = filter_input(
@@ -601,14 +606,6 @@ try {
                 'error' => 'Debes proporcionar un ID entero válido.',
             ], JSON_UNESCAPED_UNICODE);
 
-            exit;
-        }
-
-        if ($id !== AuthContext::organizacionId()) {
-            http_response_code(403);
-            echo json_encode([
-                'error' => 'No tienes permiso para esta organización.',
-            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
 

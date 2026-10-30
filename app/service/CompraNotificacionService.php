@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Confirmación de compra: correo + WhatsApp.
- * Incluye enlace mágico con JWT (#/acceso?token=…) para entrar y jugar.
+ * Confirmación de compra: correo siempre; WhatsApp Cloud API después (plantilla Meta).
+ * De momento la mesa usa el botón wa.me con mensaje corto + enlace a jugar.
  */
 final class CompraNotificacionService
 {
@@ -33,11 +33,12 @@ final class CompraNotificacionService
         }
 
         $this->enviarCorreo($datos);
-        $this->enviarWhatsApp($datos);
+        // WhatsApp automático (plantilla Meta) queda para más adelante.
+        // Hoy: botón "WhatsApp" en mesa → wa.me con mensaje corto + Jugar.
     }
 
     /**
-     * Enlace wa.me para que la mesa reenvíe a mano.
+     * Enlace wa.me (mesa): mensaje tipo plantilla corto + URL para jugar la partida.
      *
      * @param list<int> $cartonIds
      */
@@ -46,28 +47,32 @@ final class CompraNotificacionService
         string $nombreCliente,
         string $nombrePartida,
         array $cartonIds,
-        ?int $usuarioId = null
+        ?int $usuarioId = null,
+        ?int $partidaId = null
     ): ?string {
         $ids = array_values(array_filter(array_map('intval', $cartonIds)));
         $lista = $ids === []
             ? 'tus cartones'
             : implode(', ', array_map(static fn (int $id): string => '#' . $id, $ids));
         $n = count($ids);
-        $etiqueta = $n <= 0 ? 'tus cartones' : ($n === 1 ? '1 cartón' : "{$n} cartones");
+        $etiqueta = $n <= 0 ? 'tus cartones' : ($n === 1 ? '1 carton' : "{$n} cartones");
         $nombre = trim($nombreCliente) !== '' ? trim($nombreCliente) : 'jugador';
+        $next = ($partidaId !== null && $partidaId > 0)
+            ? '#/vivo/' . $partidaId
+            : '#/mis-cartones';
 
-        $urlJugar = EmailPlantilla::urlApp('#/mis-cartones');
+        $urlJugar = EmailPlantilla::urlApp($next);
 
         if ($usuarioId !== null && $usuarioId > 0) {
             $usuario = $this->usuarioRepository->buscarPorId($usuarioId);
             if ($usuario !== null) {
-                $urlJugar = $this->urlAccesoConToken($usuario);
+                $urlJugar = $this->urlAccesoConToken($usuario, $next);
             }
         }
 
         return WhatsAppService::urlManual(
             $celular,
-            $this->textoWhatsApp($nombre, $nombrePartida, $etiqueta, $lista, $urlJugar)
+            $this->textoWhatsAppCorto($nombre, $nombrePartida, $etiqueta, $lista, $urlJugar)
         );
     }
 
@@ -128,7 +133,8 @@ final class CompraNotificacionService
         }
 
         $nombrePartida = (string) ($partida['nombre'] ?? 'Bingo');
-        $urlJugar = $this->urlAccesoConToken($usuario);
+        $nextVivo = '#/vivo/' . $partidaId;
+        $urlJugar = $this->urlAccesoConToken($usuario, $nextVivo);
         $listaIds = implode(', ', array_map(
             static fn (array $c): string => '#' . $c['id'],
             $cartones
@@ -140,6 +146,7 @@ final class CompraNotificacionService
             'usuario' => $usuario,
             'nombre' => $nombre,
             'nombrePartida' => $nombrePartida,
+            'partidaId' => $partidaId,
             'cartones' => $cartones,
             'urlJugar' => $urlJugar,
             'listaIds' => $listaIds,
@@ -150,12 +157,11 @@ final class CompraNotificacionService
     }
 
     /**
-     * Enlace absoluto con JWT (mismo patrón que invitado).
-     * El token viaja dentro del link: #/acceso?token=…
+     * Enlace absoluto con JWT (#/acceso?token=…&next=…partida).
      *
      * @param array<string, mixed> $usuario
      */
-    private function urlAccesoConToken(array $usuario): string
+    private function urlAccesoConToken(array $usuario, string $next = '#/mis-cartones'): string
     {
         $ttl = self::TTL_ENLACE_DIAS * 24 * 60 * 60;
         $token = $this->jwtService->emitir(
@@ -169,8 +175,12 @@ final class CompraNotificacionService
             $ttl
         );
 
+        if ($next === '' || !str_starts_with($next, '#/')) {
+            $next = '#/mis-cartones';
+        }
+
         return EmailPlantilla::urlApp(
-            '#/acceso?token=' . rawurlencode($token) . '&next=' . rawurlencode('#/mis-cartones')
+            '#/acceso?token=' . rawurlencode($token) . '&next=' . rawurlencode($next)
         );
     }
 
@@ -199,12 +209,11 @@ final class CompraNotificacionService
             ? 'Confirmación: tu cartón de ' . $datos['nombrePartida']
             : 'Confirmación: tus cartones de ' . $datos['nombrePartida'];
 
+        // Texto plano sin pegar el JWT (el HTML lleva el botón Jugar con el acceso).
         $texto = "Hola {$datos['nombre']},\n\n"
-            . "Tu compra quedó CONFIRMADA para: {$datos['nombrePartida']}.\n"
+            . "Tu compra quedó confirmada para: {$datos['nombrePartida']}.\n"
             . "Cartones: {$datos['listaIds']}\n\n"
-            . "Entra con tu enlace personal (ya lleva tu acceso):\n"
-            . "{$datos['urlJugar']}\n\n"
-            . "Válido " . self::TTL_ENLACE_DIAS . " días. Guarda este mensaje.\n\n"
+            . "Abre el correo en HTML y toca Jugar para entrar.\n\n"
             . EmailPlantilla::marca() . "\n";
 
         try {
@@ -215,37 +224,9 @@ final class CompraNotificacionService
     }
 
     /**
-     * @param array<string, mixed> $datos
+     * Mensaje corto estilo plantilla (wa.me manual). Luego se mapea a plantilla Meta.
      */
-    private function enviarWhatsApp(array $datos): void
-    {
-        $texto = $this->textoWhatsApp(
-            (string) $datos['nombre'],
-            (string) $datos['nombrePartida'],
-            (string) $datos['etiqueta'],
-            (string) $datos['listaIds'],
-            (string) $datos['urlJugar']
-        );
-
-        // Plantilla Meta: {{1}} nombre {{2}} bingo {{3}} enlace con token
-        $params = [
-            (string) $datos['nombre'],
-            (string) $datos['nombrePartida'],
-            (string) $datos['urlJugar'],
-        ];
-
-        try {
-            $this->whatsApp->enviarConfirmacion(
-                (string) $datos['celular'],
-                $texto,
-                $params
-            );
-        } catch (Throwable $exception) {
-            error_log('CompraNotificacionService WhatsApp: ' . $exception->getMessage());
-        }
-    }
-
-    private function textoWhatsApp(
+    private function textoWhatsAppCorto(
         string $nombre,
         string $partida,
         string $etiqueta,
@@ -254,13 +235,12 @@ final class CompraNotificacionService
     ): string {
         $marca = EmailPlantilla::marca();
 
-        return "Hola {$nombre} 👋\n\n"
-            . "✅ *Compra confirmada*\n"
-            . "Bingo: *{$partida}*\n"
+        return "Hola {$nombre},\n\n"
+            . "Compra confirmada\n"
+            . "Bingo: {$partida}\n"
             . "{$etiqueta}: {$listaIds}\n\n"
-            . "Toca este enlace para entrar y jugar (ya incluye tu acceso):\n"
+            . "Jugar:\n"
             . "{$urlJugar}\n\n"
-            . "Guarda este mensaje. El enlace vale " . self::TTL_ENLACE_DIAS . " días.\n"
-            . "— {$marca}";
+            . "-- {$marca}";
     }
 }

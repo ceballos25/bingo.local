@@ -44,13 +44,13 @@ function cardPagoHtml(p) {
   const puedeDecidir =
     p.estado === 'pendiente' && p.canal === 'comprobante';
   const comprobante = p.comprobanteUrl
-    ? `<a class="btn btn-outline-primary" href="${escapeHtml(p.comprobanteUrl)}" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-image me-1" aria-hidden="true"></i>Ver comprobante
+    ? `<a class="btn btn-sm btn-outline-secondary" href="${escapeHtml(p.comprobanteUrl)}" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-image" aria-hidden="true"></i> Comprobante
       </a>`
     : '';
   const wa = p.whatsappUrl
-    ? `<a class="btn btn-outline-success" href="${escapeHtml(p.whatsappUrl)}" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-whatsapp me-1" aria-hidden="true"></i>WhatsApp al cliente
+    ? `<a class="btn btn-sm btn-outline-success" href="${escapeHtml(p.whatsappUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp con mensaje corto + Jugar">
+        <i class="bi bi-whatsapp" aria-hidden="true"></i> WhatsApp
       </a>`
     : '';
 
@@ -58,7 +58,7 @@ function cardPagoHtml(p) {
     <article class="mesa-pago-card border bg-white" data-pago-id="${p.id}">
       <div class="mesa-pago-card__head">
         <div class="min-w-0">
-          <h2 class="h5 font-brand mb-1">${nombre}</h2>
+          <h2 class="h6 font-brand mb-1">${nombre}</h2>
           <div class="d-flex flex-wrap gap-2 align-items-center">
             ${estadoPagoBadge(p.estado)}
             <span class="badge text-bg-light border">${escapeHtml(canalLabel(p.canal))}</span>
@@ -73,11 +73,11 @@ function cardPagoHtml(p) {
       <div class="mesa-pago-card__cliente">
         <div>
           <div class="small text-secondary">Celular</div>
-          <a class="fw-semibold text-decoration-none" href="tel:${celular}">${celular}</a>
+          <a class="fw-semibold mesa-cliente-contacto__link" href="tel:${celular}">${celular}</a>
         </div>
         <div class="min-w-0">
           <div class="small text-secondary">Correo</div>
-          <a class="fw-semibold text-decoration-none text-break" href="mailto:${correo}">${correo}</a>
+          <a class="fw-semibold mesa-cliente-contacto__link text-break" href="mailto:${correo}">${correo}</a>
         </div>
         <div>
           <div class="small text-secondary">Bingo</div>
@@ -101,11 +101,11 @@ function cardPagoHtml(p) {
         ${
           puedeDecidir
             ? `
-          <button type="button" class="btn btn-primary" data-aprobar="${p.id}">
-            <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Aprobar · enviar correo
+          <button type="button" class="btn btn-sm btn-primary" data-aprobar="${p.id}">
+            Aprobar
           </button>
-          <button type="button" class="btn btn-outline-danger" data-rechazar="${p.id}">
-            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Rechazar
+          <button type="button" class="btn btn-sm btn-outline-danger" data-rechazar="${p.id}">
+            Rechazar
           </button>`
             : ''
         }
@@ -115,13 +115,18 @@ function cardPagoHtml(p) {
 
 function tabsHtml(tab) {
   return `
-    <div class="btn-group w-100 mb-3" role="group" aria-label="Sección">
-      <button type="button" class="btn ${tab === 'pagos' ? 'btn-primary' : 'btn-outline-secondary'}" data-tab="pagos">
-        Pagos
-      </button>
-      <button type="button" class="btn ${tab === 'cuentas' ? 'btn-primary' : 'btn-outline-secondary'}" data-tab="cuentas">
-        Cuentas transferencia
-      </button>
+    <div class="mesa-seg mb-3" role="tablist" aria-label="Sección">
+      <button type="button" class="mesa-seg__btn ${tab === 'pagos' ? 'is-active' : ''}" data-tab="pagos">Pagos</button>
+      <button type="button" class="mesa-seg__btn ${tab === 'cuentas' ? 'is-active' : ''}" data-tab="cuentas">Cuentas</button>
+    </div>`;
+}
+
+function filtrosPagoHtml(filtro) {
+  return `
+    <div class="mesa-seg mesa-seg--wrap mb-3" role="group" aria-label="Filtro de pagos">
+      <button type="button" class="mesa-seg__btn ${filtro === 'pendiente' ? 'is-active' : ''}" data-filtro="pendiente">Por revisar</button>
+      <button type="button" class="mesa-seg__btn ${filtro === 'aprobado' ? 'is-active' : ''}" data-filtro="aprobado">Aprobados</button>
+      <button type="button" class="mesa-seg__btn ${filtro === 'todos' ? 'is-active' : ''}" data-filtro="todos">Todos</button>
     </div>`;
 }
 
@@ -254,24 +259,11 @@ export async function renderMesaPagos(root) {
     const pagos = Array.isArray(data?.pagos) ? data.pagos : [];
 
     root.innerHTML = `
-      <h1 class="h4 font-brand mb-1">Pagos y cuentas</h1>
-      <p class="text-secondary mb-3">
-        Revisa compras y configura a qué cuentas transfieren tus clientes.
-      </p>
-      ${tabsHtml('pagos')}
-
-      <div class="btn-group w-100 mb-3" role="group" aria-label="Filtro de pagos">
-        <button type="button" class="btn ${filtro === 'pendiente' ? 'btn-warning' : 'btn-outline-secondary'}" data-filtro="pendiente">
-          Por revisar
-        </button>
-        <button type="button" class="btn ${filtro === 'aprobado' ? 'btn-success' : 'btn-outline-secondary'}" data-filtro="aprobado">
-          Aprobados
-        </button>
-        <button type="button" class="btn ${filtro === 'todos' ? 'btn-primary' : 'btn-outline-secondary'}" data-filtro="todos">
-          Todos
-        </button>
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h1 class="h4 font-brand mb-0">Pagos</h1>
+        ${tabsHtml('pagos')}
       </div>
-
+      ${filtrosPagoHtml(filtro)}
       ${
         pagos.length === 0
           ? emptyHtml(
@@ -343,9 +335,11 @@ export async function renderMesaPagos(root) {
   const paintCuentas = async () => {
     if (!esAdministrador()) {
       root.innerHTML = `
-        <h1 class="h4 font-brand mb-1">Pagos y cuentas</h1>
-        ${tabsHtml('cuentas')}
-        ${emptyHtml('Solo el administrador puede gestionar las cuentas de transferencia.')}`;
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h4 font-brand mb-0">Cuentas</h1>
+          ${tabsHtml('cuentas')}
+        </div>
+        ${emptyHtml('Solo el administrador gestiona las cuentas de transferencia.')}`;
       wireTabs();
       return;
     }
@@ -354,11 +348,11 @@ export async function renderMesaPagos(root) {
     const list = Array.isArray(cuentas) ? cuentas : [];
 
     root.innerHTML = `
-      <h1 class="h4 font-brand mb-1">Pagos y cuentas</h1>
-      <p class="text-secondary mb-3">
-        Estas cuentas aparecen cuando el jugador paga por transferencia.
-      </p>
-      ${tabsHtml('cuentas')}
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h1 class="h4 font-brand mb-0">Cuentas</h1>
+        ${tabsHtml('cuentas')}
+      </div>
+      <p class="small text-secondary mb-3">Se muestran al jugador al pagar por transferencia.</p>
       ${formCuentaHtml(editCuenta)}
       ${
         list.length === 0

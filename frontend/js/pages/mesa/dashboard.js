@@ -90,8 +90,8 @@ export async function renderMesaDashboard(root) {
           <a class="btn btn-outline-primary" href="#/mesa/clientes">
             <i class="bi bi-people me-1" aria-hidden="true"></i>Clientes y equipo
           </a>
-          <a class="btn btn-outline-primary" href="#/mesa/organizacion">
-            <i class="bi bi-building me-1" aria-hidden="true"></i>${esAdministrador() ? 'Editar organización' : 'Ver organización'}
+          <a class="btn btn-outline-primary" href="#/mesa/organizaciones">
+            <i class="bi bi-building me-1" aria-hidden="true"></i>${esAdministrador() ? 'Organizaciones' : 'Mi organización'}
           </a>
         </div>
       </div>

@@ -649,8 +649,8 @@ Misma PWA (`#/mesa/*`), roles `administrador` | `operador`. Org-scoped por JWT.
 | `#/mesa/partidas/:id` | Gestionar: iniciar, YouTube, gratis, finalizar |
 | `#/mesa/vivo/:id` | **Mesa en vivo** (tablero + bombo + balotas + cantadas) |
 | `#/mesa/pagos` | Pagos / comprobantes |
-| `#/mesa/clientes` | CRUD personas de la org (`/usuarios/*`) |
-| `#/mesa/organizacion` | Ver org; editar solo admin (`PUT /organizaciones/actualizar`) |
+| `#/mesa/clientes` | Tabla personas: búsqueda, filtros, paginación, stats (`/usuarios/*`) |
+| `#/mesa/organizaciones` | CRUD tenants (admin): tabla + filtros + paginación. Operador: solo lectura de su org |
 
 **Mesa en vivo (operador)**
 
@@ -735,8 +735,8 @@ POST /auth/registro
 | YouTube live | `POST /partidas/asignar-youtube` | Listo (detalle) |
 | Venta / comprobantes | `/ventas/*` | Listo (`#/mesa/pagos`) |
 | Cuentas transferencia CRUD | `/cuentas-pago/*` | Listo (pestaña en `#/mesa/pagos`) |
-| Clientes / equipo CRUD | `GET·POST·PUT /usuarios/*` | Listo (`#/mesa/clientes`) — operador solo jugadores; admin asigna roles |
-| Organización (nombre/estado) | `GET /organizaciones/buscar` · `PUT …/actualizar` | Listo (`#/mesa/organizacion`) — editar solo admin |
+| Clientes / equipo CRUD | `GET·POST·PUT /usuarios/*` | Listo (`#/mesa/clientes`) — tabla + filtros + pág.; operador solo jugadores |
+| Organizaciones CRUD | `GET·POST·PUT /organizaciones/*` | Listo (`#/mesa/organizaciones`) — admin; crear exige JWT admin |
 
 **Pendiente técnico cercano**
 

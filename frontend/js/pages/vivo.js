@@ -225,46 +225,9 @@ async function mountYtPlayer(root, videoId) {
   });
 }
 
-function renderStream(partida) {
-  const videoId = youtubeVideoId(partida);
-  if (videoId) {
-    const modo = streamGrande ? 'is-grande' : 'is-mini';
-    return `
-      <section class="vivo-stream-wrap ${modo}" aria-label="Transmisión" data-yt-id="${escapeHtml(videoId)}">
-        <div class="vivo-stream-wrap__title">
-          <i class="bi bi-broadcast-pin" aria-hidden="true"></i> Transmisión
-        </div>
-        <div class="vivo-stream bg-dark">
-          <div id="vivoYtPlayer"></div>
-        </div>
-        <div class="vivo-stream-wrap__bar">
-          <div class="vivo-stream-wrap__actions">
-            <button type="button" class="vivo-stream-wrap__btn vivo-stream-wrap__btn--ctrl" id="btnStreamPlay" title="Play" aria-label="Play">
-              <i class="bi bi-play-fill" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="vivo-stream-wrap__btn vivo-stream-wrap__btn--ctrl" id="btnStreamMute" title="${streamConSonido ? 'Silencio' : 'Sonido'}" aria-label="${streamConSonido ? 'Silencio' : 'Sonido'}">
-              ${
-                streamConSonido
-                  ? '<i class="bi bi-volume-up-fill" aria-hidden="true"></i>'
-                  : '<i class="bi bi-volume-mute-fill" aria-hidden="true"></i>'
-              }
-            </button>
-            <button type="button" class="vivo-stream-wrap__btn" id="btnStreamToggle" title="${streamGrande ? 'Volver' : 'Grande'}" aria-label="${streamGrande ? 'Volver' : 'Grande'}">
-              ${
-                streamGrande
-                  ? '<i class="bi bi-fullscreen-exit" aria-hidden="true"></i>'
-                  : '<i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>'
-              }
-            </button>
-          </div>
-        </div>
-      </section>`;
-  }
-  return `
-    <div class="vivo-stream-box vivo-stream-box--off" role="status">
-      <i class="bi bi-broadcast" aria-hidden="true"></i>
-      <span>Sin video</span>
-    </div>`;
+function renderStream(_partida) {
+  // Transmisión pausada de momento (YouTube en vivo se reactivará después).
+  return '';
 }
 
 function renderPremios(partida) {

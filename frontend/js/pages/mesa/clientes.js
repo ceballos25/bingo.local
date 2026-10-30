@@ -8,6 +8,8 @@ import {
   toast,
 } from '../../ui.js';
 
+const PAGE_SIZE = 10;
+
 function rolBadge(rol) {
   const map = {
     jugador: 'badge text-bg-primary',
@@ -44,38 +46,43 @@ function puedeEditarPersona(u) {
   return String(u?.rol || '') === 'jugador';
 }
 
-function cardClienteHtml(u, ciudades) {
-  const nombre = escapeHtml(`${u.nombre || ''} ${u.apellido || ''}`.trim() || 'Sin nombre');
-  const editable = puedeEditarPersona(u);
+function contarRoles(lista) {
+  const c = { jugador: 0, operador: 0, administrador: 0, activo: 0, inactivo: 0 };
+  for (const u of lista) {
+    const r = String(u.rol || '');
+    if (c[r] !== undefined) c[r] += 1;
+    if (u.estado === 'activo') c.activo += 1;
+    else c.inactivo += 1;
+  }
+  return c;
+}
+
+function statsHtml(lista) {
+  const c = contarRoles(lista);
+  const total = Math.max(lista.length, 1);
+  const bar = (n, cls) =>
+    `<div class="mesa-stat-bar__seg ${cls}" style="width:${((n / total) * 100).toFixed(1)}%" title="${n}"></div>`;
+
   return `
-    <article class="mesa-cliente-card border bg-white ${u.estado === 'activo' ? '' : 'mesa-cliente-card--off'}" data-id="${u.id}">
-      <div class="d-flex justify-content-between gap-2 align-items-start">
-        <div class="min-w-0">
-          <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
-            <h2 class="h6 font-brand mb-0">${nombre}</h2>
-            ${rolBadge(u.rol)}
-            ${estadoBadge(u.estado)}
-          </div>
-          <div class="small">
-            <a class="text-decoration-none" href="tel:${escapeHtml(u.celular || '')}">${escapeHtml(u.celular || '—')}</a>
-            ·
-            <a class="text-decoration-none text-break" href="mailto:${escapeHtml(u.correo || '')}">${escapeHtml(u.correo || '—')}</a>
-          </div>
-          <div class="small text-secondary">Ciudad: ${escapeHtml(ciudadNombre(ciudades, u.ciudadId))}</div>
-        </div>
-        ${
-          editable
-            ? `<button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" data-editar="${u.id}">Editar</button>`
-            : '<span class="small text-secondary flex-shrink-0">Solo admin</span>'
-        }
+    <div class="mesa-stats border bg-white p-3 mb-3">
+      <div class="row g-2 mb-2">
+        <div class="col-6 col-md-3"><div class="small text-secondary">Total</div><div class="fs-5 fw-bold">${lista.length}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-secondary">Jugadores</div><div class="fs-5 fw-bold">${c.jugador}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-secondary">Operadores</div><div class="fs-5 fw-bold">${c.operador}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-secondary">Admins</div><div class="fs-5 fw-bold">${c.administrador}</div></div>
       </div>
-    </article>`;
+      <div class="mesa-stat-bar" aria-hidden="true">
+        ${bar(c.jugador, 'mesa-stat-bar__seg--jugador')}
+        ${bar(c.operador, 'mesa-stat-bar__seg--operador')}
+        ${bar(c.administrador, 'mesa-stat-bar__seg--admin')}
+      </div>
+      <div class="small text-secondary mt-1">${c.activo} activos · ${c.inactivo} inactivos</div>
+    </div>`;
 }
 
 function formClienteHtml(ciudades, u = null) {
   const edit = u != null;
   const admin = esAdministrador();
-  // Operador solo crea/edita jugadores; admin asigna cualquier rol.
   const roles = admin ? ['jugador', 'operador', 'administrador'] : ['jugador'];
   const rolBloqueado = !admin;
 
@@ -138,145 +145,299 @@ function formClienteHtml(ciudades, u = null) {
     </form>`;
 }
 
+function filtrarLista(lista, { q, rol, estado }) {
+  const needle = String(q || '').trim().toLowerCase();
+  return lista.filter((u) => {
+    if (rol !== 'todos' && String(u.rol) !== rol) return false;
+    if (estado !== 'todos' && String(u.estado) !== estado) return false;
+    if (!needle) return true;
+    const blob = `${u.nombre || ''} ${u.apellido || ''} ${u.celular || ''} ${u.correo || ''}`.toLowerCase();
+    return blob.includes(needle);
+  });
+}
+
+function tablaHtml(rows, ciudades) {
+  if (rows.length === 0) {
+    return emptyHtml('No hay resultados con estos filtros.');
+  }
+
+  const trs = rows
+    .map((u) => {
+      const nombre = escapeHtml(`${u.nombre || ''} ${u.apellido || ''}`.trim() || 'Sin nombre');
+      const editable = puedeEditarPersona(u);
+      return `
+        <tr class="${u.estado === 'activo' ? '' : 'table-secondary'}">
+          <td class="text-secondary small">${escapeHtml(String(u.id))}</td>
+          <td>
+            <div class="fw-semibold">${nombre}</div>
+            <div class="small mesa-cliente-contacto d-md-none">
+              <a class="mesa-cliente-contacto__link" href="tel:${escapeHtml(u.celular || '')}">${escapeHtml(u.celular || '—')}</a>
+            </div>
+          </td>
+          <td class="d-none d-md-table-cell">
+            <a class="mesa-cliente-contacto__link" href="tel:${escapeHtml(u.celular || '')}">${escapeHtml(u.celular || '—')}</a>
+          </td>
+          <td class="d-none d-lg-table-cell">
+            <a class="mesa-cliente-contacto__link text-break" href="mailto:${escapeHtml(u.correo || '')}">${escapeHtml(u.correo || '—')}</a>
+          </td>
+          <td class="d-none d-xl-table-cell small">${escapeHtml(ciudadNombre(ciudades, u.ciudadId))}</td>
+          <td>${rolBadge(u.rol)}</td>
+          <td>${estadoBadge(u.estado)}</td>
+          <td class="text-end">
+            ${
+              editable
+                ? `<button type="button" class="btn btn-sm btn-outline-primary" data-editar="${u.id}">Editar</button>`
+                : '<span class="small text-secondary">—</span>'
+            }
+          </td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    <div class="table-responsive border bg-white mesa-data-table">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Nombre</th>
+            <th class="d-none d-md-table-cell" scope="col">Celular</th>
+            <th class="d-none d-lg-table-cell" scope="col">Correo</th>
+            <th class="d-none d-xl-table-cell" scope="col">Ciudad</th>
+            <th scope="col">Rol</th>
+            <th scope="col">Estado</th>
+            <th scope="col" class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+}
+
+function pagerHtml(page, totalPages, total) {
+  if (totalPages <= 1) {
+    return `<p class="small text-secondary mt-2 mb-0">${total} registro${total === 1 ? '' : 's'}</p>`;
+  }
+  return `
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+      <p class="small text-secondary mb-0">${total} registros · pág. ${page} / ${totalPages}</p>
+      <div class="btn-group">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-page="prev" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-page="next" ${page >= totalPages ? 'disabled' : ''}>Siguiente</button>
+      </div>
+    </div>`;
+}
+
 export async function renderMesaClientes(root) {
   if (!requireMesa()) {
     root.innerHTML = emptyHtml('Solo operadores y administradores.');
     return;
   }
 
-  let filtro = 'jugador';
+  let filtroRol = 'todos';
+  let filtroEstado = 'todos';
+  let busqueda = '';
+  let page = 1;
   let editId = null;
+  let showForm = false;
   let ciudades = [];
   let lista = [];
 
-  const paint = async () => {
-    root.innerHTML = loadingHtml('Cargando personas…');
-    try {
-      const [users, cities] = await Promise.all([
-        api('/usuarios/listar'),
-        api('/ciudades/listar'),
-      ]);
-      lista = Array.isArray(users) ? users : [];
-      ciudades = Array.isArray(cities) ? cities : [];
-      const editUser = editId
-        ? lista.find((u) => Number(u.id) === Number(editId)) || null
-        : null;
+  const paint = async (reload = true) => {
+    if (reload) {
+      root.innerHTML = loadingHtml('Cargando personas…');
+      try {
+        const [users, cities] = await Promise.all([
+          api('/usuarios/listar'),
+          api('/ciudades/listar'),
+        ]);
+        lista = Array.isArray(users) ? users : [];
+        ciudades = Array.isArray(cities) ? cities : [];
+      } catch (e) {
+        toast(e.message || 'Error al cargar');
+        root.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(e.message)}</div>`;
+        return;
+      }
+    }
 
-      const filtrados =
-        filtro === 'todos'
-          ? lista
-          : lista.filter((u) => String(u.rol) === filtro);
+    const editUser = editId
+      ? lista.find((u) => Number(u.id) === Number(editId)) || null
+      : null;
+    const filtrados = filtrarLista(lista, {
+      q: busqueda,
+      rol: filtroRol,
+      estado: filtroEstado,
+    });
+    const totalPages = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    const slice = filtrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-      root.innerHTML = `
-        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-          <div>
-            <h1 class="h4 font-brand mb-1">Clientes y equipo</h1>
-            <p class="text-secondary mb-0">Jugadores, operadores y administradores de tu organización.</p>
-          </div>
+    root.innerHTML = `
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+        <div>
+          <h1 class="h4 font-brand mb-1">Clientes y equipo</h1>
+          <p class="text-secondary mb-0">Tabla con búsqueda, filtros y paginación.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-primary btn-sm" id="btnNuevaPersona">Nueva persona</button>
           <a class="btn btn-outline-secondary btn-sm" href="#/mesa">Volver</a>
         </div>
+      </div>
 
-        <div class="btn-group w-100 mb-3" role="group" aria-label="Filtro">
-          <button type="button" class="btn ${filtro === 'jugador' ? 'btn-primary' : 'btn-outline-secondary'}" data-filtro="jugador">Clientes</button>
-          <button type="button" class="btn ${filtro === 'operador' ? 'btn-primary' : 'btn-outline-secondary'}" data-filtro="operador">Operadores</button>
-          <button type="button" class="btn ${filtro === 'administrador' ? 'btn-primary' : 'btn-outline-secondary'}" data-filtro="administrador">Admins</button>
-          <button type="button" class="btn ${filtro === 'todos' ? 'btn-primary' : 'btn-outline-secondary'}" data-filtro="todos">Todos</button>
+      ${statsHtml(lista)}
+
+      ${showForm || editUser ? formClienteHtml(ciudades, editUser) : ''}
+
+      <div class="border bg-white p-3 mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label small mb-1" for="cliBuscar">Buscar</label>
+            <input class="form-control" id="cliBuscar" type="search" placeholder="Nombre, celular o correo" value="${escapeHtml(busqueda)}">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1" for="cliFiltroRol">Rol</label>
+            <select class="form-select" id="cliFiltroRol">
+              <option value="todos" ${filtroRol === 'todos' ? 'selected' : ''}>Todos</option>
+              <option value="jugador" ${filtroRol === 'jugador' ? 'selected' : ''}>Jugadores</option>
+              <option value="operador" ${filtroRol === 'operador' ? 'selected' : ''}>Operadores</option>
+              <option value="administrador" ${filtroRol === 'administrador' ? 'selected' : ''}>Admins</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small mb-1" for="cliFiltroEstado">Estado</label>
+            <select class="form-select" id="cliFiltroEstado">
+              <option value="todos" ${filtroEstado === 'todos' ? 'selected' : ''}>Todos</option>
+              <option value="activo" ${filtroEstado === 'activo' ? 'selected' : ''}>Activo</option>
+              <option value="inactivo" ${filtroEstado === 'inactivo' ? 'selected' : ''}>Inactivo</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button type="button" class="btn btn-outline-secondary w-100" id="cliLimpiarFiltros">Limpiar</button>
+          </div>
         </div>
+      </div>
 
-        ${formClienteHtml(ciudades, editUser)}
+      ${tablaHtml(slice, ciudades)}
+      ${pagerHtml(page, totalPages, filtrados.length)}`;
 
-        ${
-          filtrados.length === 0
-            ? emptyHtml('No hay personas en este filtro.')
-            : `<div class="mesa-clientes-list">${filtrados.map((u) => cardClienteHtml(u, ciudades)).join('')}</div>`
-        }`;
+    const applyFiltersFromDom = () => {
+      busqueda = root.querySelector('#cliBuscar')?.value || '';
+      filtroRol = root.querySelector('#cliFiltroRol')?.value || 'todos';
+      filtroEstado = root.querySelector('#cliFiltroEstado')?.value || 'todos';
+      page = 1;
+      paint(false);
+    };
 
-      root.querySelectorAll('[data-filtro]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          filtro = btn.getAttribute('data-filtro') || 'jugador';
-          editId = null;
-          paint();
-        });
-      });
-
-      root.querySelectorAll('[data-editar]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          editId = Number(btn.getAttribute('data-editar'));
-          paint();
-          root.querySelector('#formCliente')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      });
-
-      root.querySelector('#btnCancelarEdit')?.addEventListener('click', () => {
-        editId = null;
-        paint();
-      });
-
-      const form = root.querySelector('#formCliente');
-      form?.addEventListener('submit', async (ev) => {
+    root.querySelector('#cliBuscar')?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
         ev.preventDefault();
-        const btn = root.querySelector('#btnGuardarCliente');
-        const yo = getUsuario();
-        const ciudadId = Number(root.querySelector('#cliCiudad')?.value);
-        if (!ciudadId) {
-          toast('Elige una ciudad');
+        applyFiltersFromDom();
+      }
+    });
+    root.querySelector('#cliBuscar')?.addEventListener('change', applyFiltersFromDom);
+    root.querySelector('#cliFiltroRol')?.addEventListener('change', applyFiltersFromDom);
+    root.querySelector('#cliFiltroEstado')?.addEventListener('change', applyFiltersFromDom);
+    root.querySelector('#cliLimpiarFiltros')?.addEventListener('click', () => {
+      busqueda = '';
+      filtroRol = 'todos';
+      filtroEstado = 'todos';
+      page = 1;
+      paint(false);
+    });
+
+    root.querySelectorAll('[data-page]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const dir = btn.getAttribute('data-page');
+        if (dir === 'prev') page = Math.max(1, page - 1);
+        if (dir === 'next') page += 1;
+        paint(false);
+      });
+    });
+
+    root.querySelector('#btnNuevaPersona')?.addEventListener('click', () => {
+      editId = null;
+      showForm = true;
+      paint(false);
+      root.querySelector('#formCliente')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    root.querySelectorAll('[data-editar]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        editId = Number(btn.getAttribute('data-editar'));
+        showForm = true;
+        paint(false);
+        root.querySelector('#formCliente')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    root.querySelector('#btnCancelarEdit')?.addEventListener('click', () => {
+      editId = null;
+      showForm = false;
+      paint(false);
+    });
+
+    const form = root.querySelector('#formCliente');
+    form?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = root.querySelector('#btnGuardarCliente');
+      const yo = getUsuario();
+      const ciudadId = Number(root.querySelector('#cliCiudad')?.value);
+      if (!ciudadId) {
+        toast('Elige una ciudad');
+        return;
+      }
+
+      const payload = {
+        nombre: root.querySelector('#cliNombre')?.value?.trim() || '',
+        apellido: root.querySelector('#cliApellido')?.value?.trim() || '',
+        celular: root.querySelector('#cliCelular')?.value?.trim() || '',
+        correo: root.querySelector('#cliCorreo')?.value?.trim() || '',
+        ciudadId,
+      };
+      if (esAdministrador()) {
+        payload.rol = root.querySelector('#cliRol')?.value || 'jugador';
+      } else {
+        payload.rol = 'jugador';
+      }
+      const pass = root.querySelector('#cliPassword')?.value || '';
+      if (pass) payload.password = pass;
+
+      const idEdit = Number(form.getAttribute('data-edit-id') || 0);
+      if (idEdit > 0) {
+        payload.estado = root.querySelector('#cliEstado')?.value || 'activo';
+        if (!esAdministrador()) {
+          delete payload.rol;
+        }
+        if (yo?.id && Number(yo.id) === idEdit && payload.estado === 'inactivo') {
+          toast('No puedes desactivarte a ti mismo');
           return;
         }
+      }
 
-        const payload = {
-          nombre: root.querySelector('#cliNombre')?.value?.trim() || '',
-          apellido: root.querySelector('#cliApellido')?.value?.trim() || '',
-          celular: root.querySelector('#cliCelular')?.value?.trim() || '',
-          correo: root.querySelector('#cliCorreo')?.value?.trim() || '',
-          ciudadId,
-        };
-        if (esAdministrador()) {
-          payload.rol = root.querySelector('#cliRol')?.value || 'jugador';
-        } else {
-          payload.rol = 'jugador';
-        }
-        const pass = root.querySelector('#cliPassword')?.value || '';
-        if (pass) payload.password = pass;
-
-        const idEdit = Number(form.getAttribute('data-edit-id') || 0);
+      setButtonBusy(btn, true, 'Guardando…');
+      try {
         if (idEdit > 0) {
-          payload.estado = root.querySelector('#cliEstado')?.value || 'activo';
-          if (!esAdministrador()) {
-            delete payload.rol;
-          }
-          if (yo?.id && Number(yo.id) === idEdit && payload.estado === 'inactivo') {
-            toast('No puedes desactivarte a ti mismo');
-            return;
-          }
+          await api('/usuarios/actualizar?id=' + idEdit, {
+            method: 'PUT',
+            body: payload,
+          });
+          toast('Persona actualizada', 'success');
+        } else {
+          await api('/usuarios/crear', {
+            method: 'POST',
+            body: payload,
+          });
+          toast('Persona creada', 'success');
         }
-
-        setButtonBusy(btn, true, 'Guardando…');
-        try {
-          if (idEdit > 0) {
-            await api('/usuarios/actualizar?id=' + idEdit, {
-              method: 'PUT',
-              body: payload,
-            });
-            toast('Persona actualizada', 'success');
-          } else {
-            await api('/usuarios/crear', {
-              method: 'POST',
-              body: payload,
-            });
-            toast('Persona creada', 'success');
-          }
-          editId = null;
-          await paint();
-        } catch (e) {
-          toast(e.message || 'No se pudo guardar');
-          setButtonBusy(btn, false);
-        }
-      });
-    } catch (e) {
-      toast(e.message || 'Error al cargar');
-      root.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(e.message)}</div>`;
-    }
+        editId = null;
+        showForm = false;
+        await paint(true);
+      } catch (e) {
+        toast(e.message || 'No se pudo guardar');
+        setButtonBusy(btn, false);
+      }
+    });
   };
 
-  await paint();
+  await paint(true);
 }

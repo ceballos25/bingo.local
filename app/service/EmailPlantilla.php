@@ -2,10 +2,18 @@
 
 /**
  * Plantillas HTML de correo (tablas + estilos inline).
- * Tipografía grande y CTAs claros: pensado para adultos mayores.
+ * Estilo tipo verificación Meta: fondo claro, tipografía sobria, un solo azul de acento.
  */
 final class EmailPlantilla
 {
+    /** Azul de acento (CTA / código), no el azul de feria del bingo. */
+    private const AZUL = '#0866FF';
+
+    private const TEXTO = '#1c1e21';
+    private const MUTED = '#65676b';
+    private const BORDE = '#dadde1';
+    private const FONDO = '#f0f2f5';
+
     public static function marca(): string
     {
         $nombre = trim((string) ($_ENV['GMAIL_FROM_NAME'] ?? ''));
@@ -31,7 +39,7 @@ final class EmailPlantilla
     }
 
     /**
-     * Envoltorio común: encabezado azul + cuerpo + pie de página.
+     * Envoltorio: tarjeta blanca, marca sobria, pie gris (sin amarillo).
      */
     public static function envolver(
         string $tituloPestana,
@@ -39,11 +47,26 @@ final class EmailPlantilla
         string $eyebrow = ''
     ): string {
         $marca = self::escapar(self::marca());
-        $eyebrowSeguro = self::escapar($eyebrow !== '' ? $eyebrow : 'Bingo en vivo');
         $tituloSeguro = self::escapar($tituloPestana);
         $anio = date('Y');
         $soporteMail = self::escapar((string) ($_ENV['GMAIL_FROM'] ?? ''));
         $appUrl = self::escapar(self::appUrl());
+        $azul = self::AZUL;
+        $texto = self::TEXTO;
+        $muted = self::MUTED;
+        $borde = self::BORDE;
+        $fondo = self::FONDO;
+        unset($eyebrow);
+
+        $bloqueSoporte = '';
+        if ($soporteMail !== '') {
+            $bloqueSoporte = <<<HTML
+              <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:{$muted};">
+                ¿Necesitas ayuda?
+                <a href="mailto:{$soporteMail}" style="color:{$azul};text-decoration:none;">{$soporteMail}</a>
+              </p>
+HTML;
+        }
 
         return <<<HTML
 <!DOCTYPE html>
@@ -54,43 +77,32 @@ final class EmailPlantilla
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>{$tituloSeguro}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#eef1f6;-webkit-font-smoothing:antialiased;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef1f6;padding:28px 12px;">
+<body style="margin:0;padding:0;background-color:{$fondo};-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:{$fondo};padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background-color:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #d8dee8;box-shadow:0 8px 24px rgba(0,51,153,0.08);">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background-color:#ffffff;border-radius:8px;border:1px solid {$borde};">
           <tr>
-            <td style="background-color:#003399;padding:24px 28px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.2px;">
-                    {$marca}
-                  </td>
-                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#ffcc00;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
-                    {$eyebrowSeguro}
-                  </td>
-                </tr>
-              </table>
+            <td style="padding:28px 28px 0;font-family:Helvetica,Arial,sans-serif;">
+              <p style="margin:0;font-size:15px;font-weight:600;color:{$texto};letter-spacing:-0.01em;">
+                {$marca}
+              </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:0;font-family:Arial,Helvetica,sans-serif;color:#212529;">
+            <td style="padding:0;font-family:Helvetica,Arial,sans-serif;color:{$texto};">
               {$cuerpoHtml}
             </td>
           </tr>
           <tr>
-            <td style="background-color:#0b1f4d;padding:22px 28px;font-family:Arial,Helvetica,sans-serif;color:#c9d4ef;text-align:center;">
-              <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#ffffff;">{$marca}</p>
-              <p style="margin:0 0 10px;font-size:13px;line-height:1.5;">
-                ¿Necesitas ayuda? Escríbenos a
-                <a href="mailto:{$soporteMail}" style="color:#ffcc00;text-decoration:none;font-weight:700;">{$soporteMail}</a>
+            <td style="padding:24px 28px 28px;font-family:Helvetica,Arial,sans-serif;border-top:1px solid {$borde};">
+              {$bloqueSoporte}
+              <p style="margin:0 0 8px;font-size:12px;line-height:1.5;color:{$muted};">
+                <a href="{$appUrl}/app/" style="color:{$muted};text-decoration:underline;">Abrir la app</a>
+                · Correo automático; no respondas a este mensaje.
               </p>
-              <p style="margin:0 0 6px;font-size:12px;line-height:1.45;color:#9aabc9;">
-                <a href="{$appUrl}/app/" style="color:#9aabc9;text-decoration:underline;">Abrir la app</a>
-                · Este correo es automático; no respondas a este mensaje.
-              </p>
-              <p style="margin:12px 0 0;font-size:11px;color:#6f82a8;">
-                © {$anio} {$marca}. Todos los derechos reservados.
+              <p style="margin:0;font-size:12px;color:{$muted};">
+                © {$anio} {$marca}
               </p>
             </td>
           </tr>
@@ -107,12 +119,13 @@ HTML;
     {
         $urlSeguro = self::escapar($url);
         $textoSeguro = self::escapar($texto);
+        $azul = self::AZUL;
 
         return <<<HTML
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:8px auto 4px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:4px auto;">
   <tr>
-    <td align="center" bgcolor="#00994c" style="border-radius:10px;">
-      <a href="{$urlSeguro}" style="display:inline-block;padding:16px 28px;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">
+    <td align="center" bgcolor="{$azul}" style="border-radius:6px;">
+      <a href="{$urlSeguro}" style="display:inline-block;padding:12px 24px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">
         {$textoSeguro}
       </a>
     </td>
@@ -125,37 +138,41 @@ HTML;
     {
         $nombreSeguro = self::escapar($nombre);
         $codigoSeguro = self::escapar($codigo);
+        $texto = self::TEXTO;
+        $muted = self::MUTED;
+        $borde = self::BORDE;
+        $azul = self::AZUL;
 
         $cuerpo = <<<HTML
-<div style="padding:32px 28px 8px;">
-  <p style="margin:0 0 10px;font-size:26px;font-weight:700;line-height:1.25;color:#003399;">
+<div style="padding:20px 28px 8px;">
+  <p style="margin:0 0 12px;font-size:22px;font-weight:600;line-height:1.3;color:{$texto};">
     Tu código de acceso
   </p>
-  <p style="margin:0 0 22px;font-size:17px;line-height:1.55;color:#343a40;">
-    Hola <strong>{$nombreSeguro}</strong>, usa este código para entrar. No lo compartas con nadie.
+  <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:{$muted};">
+    Hola {$nombreSeguro}, introduce este código para continuar. No lo compartas con nadie.
   </p>
 </div>
 <div style="padding:0 28px 8px;text-align:center;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;background-color:#f7f9fc;border:2px dashed #003399;border-radius:12px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;background-color:#f7f8fa;border:1px solid {$borde};border-radius:8px;">
     <tr>
-      <td style="padding:20px 40px;font-family:'Courier New',Courier,monospace;font-size:40px;font-weight:700;letter-spacing:12px;color:#003399;text-align:center;">
+      <td style="padding:18px 32px;font-family:Helvetica,Arial,sans-serif;font-size:36px;font-weight:700;letter-spacing:10px;color:{$texto};text-align:center;">
         {$codigoSeguro}
       </td>
     </tr>
   </table>
 </div>
-<div style="padding:20px 28px 32px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fff8e6;border-radius:10px;">
-    <tr>
-      <td style="padding:14px 16px;font-size:15px;line-height:1.5;color:#664d03;">
-        <strong>Vence en 10 minutos.</strong> Si no pediste este código, ignora el correo.
-      </td>
-    </tr>
-  </table>
+<div style="padding:20px 28px 28px;">
+  <p style="margin:0;font-size:13px;line-height:1.5;color:{$muted};">
+    Este código vence en <strong style="color:{$texto};">10 minutos</strong>.
+    Si no pediste este acceso, puedes ignorar el correo.
+  </p>
+  <p style="margin:16px 0 0;font-size:12px;line-height:1.45;color:{$muted};">
+    Por tu seguridad, <span style="color:{$azul};">nunca</span> te pediremos este código por teléfono o chat.
+  </p>
 </div>
 HTML;
 
-        return self::envolver('Código de acceso', $cuerpo, 'Acceso seguro');
+        return self::envolver('Código de acceso', $cuerpo);
     }
 
     /**
@@ -171,8 +188,10 @@ HTML;
         $partidaSeguro = self::escapar($nombrePartida);
         $cantidad = count($cartones);
         $etiqueta = $cantidad === 1 ? '1 cartón' : "{$cantidad} cartones";
-        $boton = self::boton($urlJugar, 'Entrar y jugar (un toque)');
-        $urlSeguro = self::escapar($urlJugar);
+        // El JWT va solo en el href del botón (no se muestra el enlace largo al cliente).
+        $boton = self::boton($urlJugar, 'Jugar');
+        $texto = self::TEXTO;
+        $muted = self::MUTED;
         $bloques = '';
 
         foreach ($cartones as $carton) {
@@ -182,33 +201,25 @@ HTML;
         }
 
         $cuerpo = <<<HTML
-<div style="padding:32px 28px 10px;">
-  <p style="margin:0 0 10px;font-size:26px;font-weight:700;line-height:1.25;color:#003399;">
-    Confirmación de compra
+<div style="padding:20px 28px 10px;">
+  <p style="margin:0 0 12px;font-size:22px;font-weight:600;line-height:1.3;color:{$texto};">
+    Compra confirmada
   </p>
-  <p style="margin:0 0 8px;font-size:17px;line-height:1.55;color:#343a40;">
-    Hola <strong>{$nombreSeguro}</strong>, tu pago quedó confirmado. Ya tienes tus cartones.
+  <p style="margin:0 0 8px;font-size:15px;line-height:1.5;color:{$muted};">
+    Hola {$nombreSeguro}, tu pago quedó registrado.
   </p>
-  <p style="margin:0 0 18px;font-size:17px;line-height:1.55;color:#343a40;">
-    Bingo: <strong>{$partidaSeguro}</strong><br>
-    Recibiste: <strong>{$etiqueta}</strong>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:{$texto};">
+    <strong>{$partidaSeguro}</strong><br>
+    <span style="color:{$muted};">{$etiqueta}</span>
   </p>
   {$boton}
-  <p style="margin:18px 0 0;font-size:15px;line-height:1.55;color:#495057;">
-    El botón verde abre la app con tu acceso. No necesitas contraseña.<br>
-    Cuando empiece el bingo, toca <strong>Jugar en vivo</strong>.
-  </p>
-  <p style="margin:12px 0 0;font-size:13px;line-height:1.45;color:#6c757d;word-break:break-all;">
-    Si el botón no funciona, copia este enlace:<br>
-    <a href="{$urlSeguro}" style="color:#003399;">{$urlSeguro}</a>
-  </p>
 </div>
-<div style="padding:8px 20px 28px;">
+<div style="padding:8px 20px 24px;">
   {$bloques}
 </div>
 HTML;
 
-        return self::envolver('Confirmación de compra', $cuerpo, 'Compra confirmada');
+        return self::envolver('Confirmación de compra', $cuerpo);
     }
 
     /**
@@ -219,6 +230,9 @@ HTML;
         $idSeguro = self::escapar((string) $cartonId);
         $letras = ['B', 'I', 'N', 'G', 'O'];
         $filasHtml = '';
+        $borde = self::BORDE;
+        $texto = self::TEXTO;
+        $muted = self::MUTED;
 
         for ($r = 0; $r < 5; $r++) {
             $celdas = '';
@@ -229,40 +243,40 @@ HTML;
                 }
 
                 if ($letra === 'N' && count($col) === 4 && $r === 2) {
-                    $texto = 'FREE';
-                    $estilo = 'background-color:#ffcc00;color:#003399;font-weight:800;font-size:12px;';
+                    $celdaTexto = 'FREE';
+                    $estilo = 'background-color:#f0f2f5;color:' . $muted . ';font-weight:700;font-size:11px;';
                 } else {
                     $idx = $r;
                     if ($letra === 'N' && count($col) === 4 && $r > 2) {
                         $idx = $r - 1;
                     }
                     $valor = $col[$idx] ?? '';
-                    $texto = self::escapar((string) $valor);
-                    $estilo = 'background-color:#ffffff;color:#111;font-weight:700;';
+                    $celdaTexto = self::escapar((string) $valor);
+                    $estilo = 'background-color:#ffffff;color:' . $texto . ';font-weight:600;';
                 }
 
-                $celdas .= '<td align="center" style="border:1px solid #003399;padding:8px 4px;font-size:15px;line-height:1.1;'
-                    . $estilo . '">' . $texto . '</td>';
+                $celdas .= '<td align="center" style="border:1px solid ' . $borde . ';padding:8px 4px;font-size:14px;line-height:1.1;'
+                    . $estilo . '">' . $celdaTexto . '</td>';
             }
             $filasHtml .= '<tr>' . $celdas . '</tr>';
         }
 
         $heads = '';
         foreach ($letras as $letra) {
-            $heads .= '<th style="background-color:#003399;color:#fff;font-size:14px;padding:8px 4px;border:1px solid #002266;">'
-                . $letra . '</th>';
+            $heads .= '<th style="background-color:#f7f8fa;color:' . $muted . ';font-size:12px;font-weight:700;padding:8px 4px;border:1px solid '
+                . $borde . ';">' . $letra . '</th>';
         }
 
         return <<<HTML
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border:2px solid #003399;border-radius:10px;overflow:hidden;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;border:1px solid {$borde};border-radius:8px;overflow:hidden;">
   <tr>
-    <td style="background-color:#e8eefc;padding:10px 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#003399;">
+    <td style="background-color:#ffffff;padding:12px 14px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:{$texto};border-bottom:1px solid {$borde};">
       Cartón #{$idSeguro}
     </td>
   </tr>
   <tr>
     <td style="padding:0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;">
         <tr>{$heads}</tr>
         {$filasHtml}
       </table>

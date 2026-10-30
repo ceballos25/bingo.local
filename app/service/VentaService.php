@@ -65,7 +65,8 @@ final class VentaService
                 ),
                 (string) ($pago['partidaNombre'] ?? 'Bingo'),
                 [(int) ($pago['cartonId'] ?? 0)],
-                (int) ($pago['usuarioId'] ?? 0)
+                (int) ($pago['usuarioId'] ?? 0),
+                (int) ($pago['partidaId'] ?? 0)
             );
         }
         unset($pago);
