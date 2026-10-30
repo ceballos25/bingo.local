@@ -730,76 +730,16 @@ try {
         exit;
     }
 
-    // 20. Solicitud no reconocida.
-    http_response_code(404);
+    // Raíz del sitio → PWA (evita 404 JSON en el dominio).
+    if ($method === 'GET' && ($resource === '' || $resource === 'index.php')) {
+        header('Location: /app/', true, 302);
+        exit;
+    }
 
+    // 20. Solicitud no reconocida (sin catálogo de rutas: no filtrar el mapa de la API).
+    http_response_code(404);
     echo json_encode([
         'error' => 'Ruta no encontrada.',
-        'rutas_disponibles' => [
-            'POST /cartones/crear',
-            'GET /cartones/listar',
-            'GET /cartones/listar?organizacionId=1',
-            'GET /cartones/listar?usuarioId=1',
-            'GET /cartones/listar?partidaId=1',
-            'GET /cartones/buscar?id=1',
-            'PUT /cartones/actualizar?id=1',
-            'DELETE /cartones/eliminar?id=1',
-            'POST /organizaciones/crear',
-            'GET /organizaciones/resumen',
-            'GET /organizaciones/listar',
-            'GET /organizaciones/buscar?id=1',
-            'PUT /organizaciones/actualizar?id=1',
-            'POST /usuarios/crear',
-            'GET /usuarios/listar',
-            'GET /usuarios/listar?organizacionId=1',
-            'GET /usuarios/buscar?id=1',
-            'PUT /usuarios/actualizar?id=1',
-            'GET /ciudades/listar',
-            'POST /auth/login',
-            'POST /auth/registro',
-            'POST /auth/invitado',
-            'POST /auth/acceso-invitado',
-            'POST /auth/otp-solicitar',
-            'POST /auth/otp-verificar',
-            'GET /auth/yo',
-            'POST /partidas/crear',
-            'GET /partidas/listar',
-            'GET /partidas/publicas?organizacionId=1',
-            'GET /partidas/listar?organizacionId=1',
-            'GET /partidas/vitrina?id=1',
-            'GET /partidas/buscar?id=1',
-            'POST /partidas/iniciar',
-            'POST /partidas/finalizar',
-            'POST /partidas/asignar-youtube',
-            'POST /partidas/marcar-gratis',
-            'GET /partidas/eventos?partidaId=1&desdeId=0',
-            'GET /realtime/config',
-            'GET /push/vapid-publica',
-            'POST /push/suscribir',
-            'POST /push/desuscribir',
-            'POST /balotas/sacar',
-            'GET /balotas/listar?partidaId=1',
-            'POST /reclamos/prevalidar',
-            'POST /reclamos/cantar',
-            'POST /reclamos/aprobar',
-            'POST /reclamos/rechazar',
-            'GET /reclamos/listar?partidaId=1',
-            'POST /ventas/manual',
-            'POST /ventas/gratis',
-            'GET /ventas/listar',
-            'POST /ventas/pse',
-            'GET /ventas/retorno-pse?id=',
-            'GET /pago-ok?id=',
-            'POST /ventas/webhook-openpay',
-            'POST /ventas/comprobante',
-            'POST /ventas/aprobar-comprobante',
-            'POST /ventas/rechazar-comprobante',
-            'GET /cuentas-pago/publicas?organizacionId=1',
-            'GET /cuentas-pago/listar',
-            'POST /cuentas-pago/crear',
-            'PUT /cuentas-pago/actualizar?id=1',
-            'DELETE /cuentas-pago/eliminar?id=1',
-        ],
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
 } catch (Throwable $exception) {
