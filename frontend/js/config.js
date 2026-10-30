@@ -13,7 +13,7 @@ export const CONFIG = {
   ciudadIdDefault: 1,
 
   /** Versión de la app (footer / soporte). */
-  appVersion: '1.0',
+  appVersion: '1.0.3',
 
   /** Marca visible (nav, título, footer). */
   brandName: 'CCM Software',

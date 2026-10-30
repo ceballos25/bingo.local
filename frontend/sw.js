@@ -1,9 +1,10 @@
 /* Service worker PWA — shell + push */
-const CACHE = 'bingo-shell-v230';
+const CACHE = 'bingo-shell-v231';
+const ASSET_V = '231';
 const SHELL = [
   './',
   './index.html',
-  './css/app.css',
+  `./css/app.css?v=${ASSET_V}`,
   './js/config.js',
   './js/api.js',
   './js/auth.js',
@@ -18,7 +19,7 @@ const SHELL = [
   './js/sound.js',
   './js/celebrate.js',
   './js/push.js',
-  './js/app.js',
+  `./js/app.js?v=${ASSET_V}`,
   './js/pages/landing.js',
   './manifest.webmanifest',
   './icons/logo.png',

@@ -14,7 +14,7 @@ export async function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) {
     return null;
   }
-  const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  const reg = await navigator.serviceWorker.register('./sw.js?v=231', { scope: './' });
   return reg;
 }
 
