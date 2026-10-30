@@ -10,12 +10,13 @@ import { escapeHtml, otpInputsHtml, setButtonBusy, toast, wireOtpInputs } from '
 let pendingResolve = null;
 let wired = false;
 
+function etiquetaCiudad(c) {
+  return c?.etiqueta || (c?.departamento ? `${c.nombre} (${c.departamento})` : c?.nombre || c?.ciudad || String(c?.id || ''));
+}
+
 function opcionesCiudad(ciudades) {
   return (ciudades || [])
-    .map(
-      (c) =>
-        `<option value="${c.id}">${escapeHtml(c.nombre || c.ciudad || String(c.id))}</option>`
-    )
+    .map((c) => `<option value="${c.id}">${escapeHtml(etiquetaCiudad(c))}</option>`)
     .join('');
 }
 

@@ -9,13 +9,31 @@ final class CiudadRepository
 
     public function listarTodos(): array
     {
-        $sql = 'SELECT id, nombre
-                FROM ciudades
-                ORDER BY nombre ASC';
+        $sql = 'SELECT
+                    c.id,
+                    c.nombre,
+                    d.nombre AS departamento
+                FROM ciudades c
+                LEFT JOIN departamentos d ON d.id = c.departamentoId
+                ORDER BY c.nombre ASC, d.nombre ASC';
 
         $statement = $this->database->query($sql);
 
-        return $statement->fetchAll();
+        $filas = $statement->fetchAll();
+        $respuesta = [];
+
+        foreach ($filas as $fila) {
+            $nombre = (string) ($fila['nombre'] ?? '');
+            $depto = trim((string) ($fila['departamento'] ?? ''));
+            $respuesta[] = [
+                'id' => (int) $fila['id'],
+                'nombre' => $nombre,
+                'departamento' => $depto !== '' ? $depto : null,
+                'etiqueta' => $depto !== '' ? "{$nombre} ({$depto})" : $nombre,
+            ];
+        }
+
+        return $respuesta;
     }
 
     public function buscarPorId(int $id): ?array

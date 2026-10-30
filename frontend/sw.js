@@ -1,6 +1,6 @@
 /* Service worker PWA — shell + push */
-const CACHE = 'bingo-shell-v231';
-const ASSET_V = '231';
+const CACHE = 'bingo-shell-v232';
+const ASSET_V = '232';
 const SHELL = [
   './',
   './index.html',

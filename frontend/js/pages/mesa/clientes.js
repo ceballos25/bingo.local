@@ -27,16 +27,20 @@ function estadoBadge(estado) {
   return `<span class="badge text-bg-secondary">${escapeHtml(String(estado || 'inactivo'))}</span>`;
 }
 
+function etiquetaCiudad(c) {
+  return c?.etiqueta || (c?.departamento ? `${c.nombre} (${c.departamento})` : c?.nombre || c?.ciudad || String(c?.id || ''));
+}
+
 function ciudadNombre(ciudades, ciudadId) {
   const c = (ciudades || []).find((x) => Number(x.id) === Number(ciudadId));
-  return c ? c.nombre || c.ciudad || String(c.id) : '—';
+  return c ? etiquetaCiudad(c) : '—';
 }
 
 function opcionesCiudad(ciudades, selectedId) {
   return (ciudades || [])
     .map((c) => {
       const sel = Number(c.id) === Number(selectedId) ? ' selected' : '';
-      return `<option value="${c.id}"${sel}>${escapeHtml(c.nombre || c.ciudad || String(c.id))}</option>`;
+      return `<option value="${c.id}"${sel}>${escapeHtml(etiquetaCiudad(c))}</option>`;
     })
     .join('');
 }
