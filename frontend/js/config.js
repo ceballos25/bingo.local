@@ -25,9 +25,9 @@ export const CONFIG = {
    * whatsapp: código país + número, sin + ni espacios (ej. 573001112233).
    */
   support: {
-    whatsapp: '573001112233',
+    whatsapp: '573245894268',
     email: 'contacto@ccmsoftware.com.co',
-    phoneLabel: '300 111 2233',
+    phoneLabel: '324 589 4268',
     hours: 'Lun–Sáb 8:00–20:00',
   },
 
