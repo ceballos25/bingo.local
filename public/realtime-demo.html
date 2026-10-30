@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bingo · prueba realtime</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    label { display: block; margin-top: 0.75rem; }
+    input { width: 100%; padding: 0.4rem; box-sizing: border-box; }
+    button { margin-top: 1rem; margin-right: 0.5rem; padding: 0.5rem 1rem; }
+    #driverBadge { display: inline-block; margin-left: 0.5rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.85rem; background: #e5e7eb; }
+    #driverBadge.sse { background: #dbeafe; color: #1e40af; }
+    #driverBadge.centrifugo { background: #dcfce7; color: #166534; }
+    #log { margin-top: 1rem; background: #111; color: #d4d4d4; padding: 1rem; height: 320px; overflow: auto; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    .ok { color: #4ade80; }
+    .err { color: #f87171; }
+    .hint { color: #b45309; }
+    #wsRow { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Prueba realtime <span id="driverBadge">…</span></h1>
+  <p>Saca balotas o canta bingo por Postman; aquí ves el push. Driver según <code>/realtime/config</code> (<code>CENTRIFUGO_ENABLED</code>).</p>
+  <p id="hint" class="hint"></p>
+
+  <div id="wsRow">
+    <label>WebSocket Centrifugo
+      <input id="wsUrl" value="">
+    </label>
+  </div>
+  <label>partidaId
+    <input id="partidaId" type="number" value="1" min="1">
+  </label>
+  <label>JWT (Bearer / ?token= para SSE)
+    <input id="token" type="text" placeholder="pega el token del login" autocomplete="off">
+  </label>
+  <button id="btnConnect" type="button">Suscribirse</button>
+  <button id="btnDisconnect" type="button" disabled>Desuscribirse</button>
+
+  <div id="log"></div>
+
+  <script src="https://unpkg.com/centrifuge@5.3.4/dist/centrifuge.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    const btnConnect = document.getElementById('btnConnect');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    const driverBadge = document.getElementById('driverBadge');
+    const hintEl = document.getElementById('hint');
+    const wsRow = document.getElementById('wsRow');
+    const wsUrlInput = document.getElementById('wsUrl');
+
+    let config = null;
+    let centrifuge = null;
+    let sub = null;
+    let eventSource = null;
+    let ultimoEventoId = 0;
+
+    function log(msg, cls) {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = '[' + new Date().toISOString().slice(11, 19) + '] ' + msg;
+      logEl.prepend(line);
+    }
+
+    function setConnectedUi(connected) {
+      btnConnect.disabled = connected;
+      btnDisconnect.disabled = !connected;
+    }
+
+    function desconectarTodo() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (sub) {
+        try { sub.unsubscribe(); } catch (e) {}
+        sub = null;
+      }
+      if (centrifuge) {
+        try { centrifuge.disconnect(); } catch (e) {}
+        centrifuge = null;
+      }
+    }
+
+    async function cargarConfig() {
+      const res = await fetch('/realtime/config');
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      config = await res.json();
+      driverBadge.textContent = config.driver;
+      driverBadge.className = config.driver;
+
+      if (config.driver === 'sse') {
+        hintEl.textContent = 'Modo SSE (PHP): no hace falta Docker. EventSource → /partidas/eventos';
+        wsRow.style.display = 'none';
+      } else {
+        hintEl.textContent = 'Modo Centrifugo: requiere docker compose up -d';
+        wsRow.style.display = 'block';
+        wsUrlInput.value = config.wsUrl || 'ws://127.0.0.1:8000/connection/websocket';
+      }
+      log('config driver=' + config.driver, 'ok');
+    }
+
+    function conectarSse(partidaId, token) {
+      desconectarTodo();
+      let url = config.sseUrl
+        + '?partidaId=' + encodeURIComponent(partidaId)
+        + '&desdeId=' + encodeURIComponent(ultimoEventoId);
+      if (token) {
+        url += '&token=' + encodeURIComponent(token);
+      }
+
+      eventSource = new EventSource(url);
+      log('SSE abriendo ' + url);
+
+      const tipos = ['mesa', 'balota', 'reclamo_pendiente', 'reclamo_aprobado', 'reclamo_rechazado', 'partida_estado', 'timeout'];
+
+      tipos.forEach((tipo) => {
+        eventSource.addEventListener(tipo, (ev) => {
+          if (ev.lastEventId) {
+            ultimoEventoId = parseInt(ev.lastEventId, 10) || ultimoEventoId;
+          }
+          let data = ev.data;
+          try { data = JSON.stringify(JSON.parse(ev.data)); } catch (e) {}
+          log('SSE ' + tipo + ' ← ' + data, tipo === 'timeout' ? 'hint' : 'ok');
+
+          if (tipo === 'timeout') {
+            try {
+              const payload = JSON.parse(ev.data);
+              if (payload.reconectarConDesdeId != null) {
+                ultimoEventoId = payload.reconectarConDesdeId;
+              }
+            } catch (e) {}
+            eventSource.close();
+            eventSource = null;
+            log('SSE timeout → reconectando…', 'hint');
+            conectarSse(partidaId, token);
+          }
+        });
+      });
+
+      eventSource.onerror = () => {
+        log('SSE error / cerrado', 'err');
+      };
+
+      setConnectedUi(true);
+      log('SSE suscrito partida=' + partidaId + ' desdeId=' + ultimoEventoId, 'ok');
+    }
+
+    function conectarCentrifugo(partidaId) {
+      if (typeof Centrifuge === 'undefined') {
+        log('No cargó centrifuge.js (CDN).', 'err');
+        return;
+      }
+
+      desconectarTodo();
+      const wsUrl = wsUrlInput.value.trim();
+      const channel = 'partida:' + partidaId;
+
+      centrifuge = new Centrifuge(wsUrl);
+      centrifuge.on('connecting', (ctx) => log('connecting: ' + ctx.reason));
+      centrifuge.on('connected', (ctx) => log('connected client=' + ctx.client, 'ok'));
+      centrifuge.on('disconnected', (ctx) => log('disconnected: ' + ctx.reason, 'err'));
+      centrifuge.on('error', (ctx) => log('error: ' + JSON.stringify(ctx), 'err'));
+
+      sub = centrifuge.newSubscription(channel);
+      sub.on('publication', (ctx) => {
+        log(channel + ' ← ' + JSON.stringify(ctx.data), 'ok');
+      });
+      sub.on('subscribed', () => log('subscribed ' + channel, 'ok'));
+      sub.on('error', (ctx) => log('sub error: ' + JSON.stringify(ctx), 'err'));
+
+      sub.subscribe();
+      centrifuge.connect();
+      setConnectedUi(true);
+    }
+
+    btnConnect.addEventListener('click', async () => {
+      try {
+        if (!config) {
+          await cargarConfig();
+        }
+      } catch (e) {
+        log('No se pudo leer /realtime/config: ' + e.message, 'err');
+        return;
+      }
+
+      const partidaId = document.getElementById('partidaId').value.trim();
+      const token = document.getElementById('token').value.trim();
+      if (!partidaId) {
+        log('partidaId requerido', 'err');
+        return;
+      }
+      if (!token) {
+        log('JWT requerido (login → token)', 'err');
+        return;
+      }
+
+      if (config.driver === 'sse') {
+        conectarSse(partidaId, token);
+      } else {
+        conectarCentrifugo(partidaId);
+      }
+    });
+
+    btnDisconnect.addEventListener('click', () => {
+      desconectarTodo();
+      setConnectedUi(false);
+      log('desuscrito');
+    });
+
+    cargarConfig().catch((e) => {
+      log('Config inicial falló: ' + e.message, 'err');
+      driverBadge.textContent = 'error';
+    });
+  </script>
+</body>
+</html>

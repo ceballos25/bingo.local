@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#003399">
+  <title>Pago PSE · CCM Software</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="./css/app.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary">
+  <nav class="navbar bg-primary border-bottom border-warning border-3">
+    <div class="container-lg">
+      <a class="navbar-brand brand-lockup mb-0 text-decoration-none text-white" href="./index.html#/landing" aria-label="CCM Software">
+        <img class="brand-lockup__logo" src="./icons/logo.png" width="44" height="44" alt="">
+        <span class="brand-lockup__text">
+          <span class="brand-lockup__name font-brand">CCM Software</span>
+          <span class="brand-lockup__tag">Bingo en vivo</span>
+        </span>
+      </a>
+    </div>
+  </nav>
+  <main class="container-lg py-4" style="max-width:560px">
+    <div class="border bg-white p-4 text-center">
+      <div class="spinner-border text-primary mb-3" id="spin" role="status"></div>
+      <div class="display-4 mb-2 d-none" id="icono" aria-hidden="true"></div>
+      <h1 class="h4 font-brand" id="titulo">Revisando tu pago…</h1>
+      <p class="fs-5 text-secondary mb-3" id="msg">No cierres esta pantalla.</p>
+      <a class="btn btn-success btn-lg w-100" id="btnCartones" href="./index.html#/mis-cartones"><i class="bi bi-grid-3x3-gap me-1" aria-hidden="true"></i>Ver mis cartones</a>
+      <a class="btn btn-outline-primary btn-lg w-100 mt-2 d-none" id="btnReintentar" href="./index.html#/landing"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Intentar otra vez</a>
+    </div>
+    <p class="text-secondary text-center mt-3 mb-0">
+      ¿Necesitas ayuda?
+      <a id="soporte" href="#" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1" aria-hidden="true"></i>Escríbenos por WhatsApp</a>
+    </p>
+  </main>
+  <script type="module">
+    import { api } from './js/api.js';
+    import { getToken } from './js/auth.js';
+    import { CONFIG } from './js/config.js';
+
+    const params = new URLSearchParams(location.search);
+    const chargeId = params.get('id');
+    const partidaId = params.get('partidaId');
+    const msg = document.getElementById('msg');
+    const spin = document.getElementById('spin');
+    const titulo = document.getElementById('titulo');
+    const icono = document.getElementById('icono');
+    const MIS_CARTONES = './index.html#/mis-cartones';
+
+    const soporte = document.getElementById('soporte');
+    if (CONFIG.support?.whatsapp) {
+      soporte.href = 'https://wa.me/' + CONFIG.support.whatsapp +
+        '?text=' + encodeURIComponent('Hola, necesito ayuda con un pago PSE' + (chargeId ? ' (' + chargeId + ')' : ''));
+    } else {
+      soporte.parentElement.classList.add('d-none');
+    }
+    if (partidaId) {
+      document.getElementById('btnReintentar').href = './index.html#/comprar/' + encodeURIComponent(partidaId);
+    }
+
+    function mostrar(estado, tituloTxt, msgTxt) {
+      spin.classList.add('d-none');
+      icono.classList.remove('d-none');
+      icono.innerHTML = {
+        ok: '<i class="bi bi-check-circle-fill text-success"></i>',
+        espera: '<i class="bi bi-hourglass-split text-warning"></i>',
+        mal: '<i class="bi bi-x-circle-fill text-danger"></i>',
+      }[estado];
+      titulo.textContent = tituloTxt;
+      msg.textContent = msgTxt;
+      document.getElementById('btnReintentar').classList.toggle('d-none', estado !== 'mal');
+    }
+
+    const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    /** Limpia carrito de la partida tras ir a PSE (éxito o intento). */
+    function vaciarCarritoSesion() {
+      if (!partidaId) return;
+      try {
+        sessionStorage.setItem('bingo_cart_' + partidaId, '[]');
+      } catch (_) {}
+    }
+
+    async function run() {
+      vaciarCarritoSesion();
+      if (!chargeId || !getToken()) {
+        location.replace(MIS_CARTONES);
+        return;
+      }
+      // El banco puede tardar unos segundos en confirmar: preguntamos ~1 minuto.
+      for (let intento = 0; intento < 15; intento++) {
+        let estado = '';
+        try {
+          const res = await api('/ventas/retorno-pse?id=' + encodeURIComponent(chargeId));
+          estado = String(res?.pago?.estado || '');
+        } catch (_) {
+          estado = '';
+        }
+        if (estado === 'aprobado') {
+          mostrar('ok', '¡Pago listo!', 'Ya tienes tus cartones. Te llevamos a verlos…');
+          await esperar(2000);
+          location.replace(MIS_CARTONES);
+          return;
+        }
+        if (estado === 'rechazado' || estado === 'expirado') {
+          mostrar('mal', 'El pago no pasó', 'El banco no aprobó el pago. Puedes intentar otra vez.');
+          return;
+        }
+        if (intento === 2) msg.textContent = 'El banco está confirmando. Espera un momento…';
+        await esperar(4000);
+      }
+      mostrar(
+        'espera',
+        'El banco aún no confirma',
+        'Cuando el banco confirme, tus cartones aparecen solos en "Mis cartones".'
+      );
+    }
+    run();
+  </script>
+</body>
+</html>

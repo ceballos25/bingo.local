@@ -1,0 +1,751 @@
+{
+	"info": {
+		"name": "Bingo API",
+		"description": "API local de Bingo Virtual.\n\nBase URL: `{{base_url}}`\nFormato: `/{recurso}/{accion}`\n\nAuth: `POST /auth/login` → pegar `token` en el environment.\nAuthGuard exige Bearer en casi todo. Públicos: login, ciudades/listar, realtime/config, organizaciones/crear, webhook OpenPay, retorno PSE.\nSSE: `?token=` además de Bearer.\n\nImporta el environment **Bingo Local** y selecciónalo antes de probar.\nLas variables se editan a mano; esta colección no las modifica con scripts.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{ "key": "token", "value": "{{token}}", "type": "string" }
+		]
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"description": "JWT. Login con correo o celular + password dentro de una organización.",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organizacionId\": {{organizacionId}},\n  \"identificador\": \"{{usuarioCorreo}}\",\n  \"password\": \"{{password}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}auth/login",
+						"description": "identificador = correo o celular. Copia el token de la respuesta a la variable `token` del environment. Rutas protegidas heredan Bearer de la colección."
+					},
+					"response": []
+				},
+				{
+					"name": "Registro jugador",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organizacionId\": {{organizacionId}},\n  \"ciudadId\": {{ciudadId}},\n  \"nombre\": \"{{usuarioNombre}}\",\n  \"apellido\": \"{{usuarioApellido}}\",\n  \"celular\": \"{{usuarioCelular}}\",\n  \"correo\": \"nuevo.jugador@bingo.local\",\n  \"password\": \"{{password}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}auth/registro",
+						"description": "Público. Siempre crea rol jugador y devuelve token + usuario."
+					},
+					"response": []
+				},
+				{
+					"name": "Yo",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{ "key": "token", "value": "{{token}}", "type": "string" }
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}auth/yo",
+						"description": "Devuelve el usuario del Bearer token."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Cartones",
+			"description": "Cartones 5x5 asociados a una organización.\n\nEstados: `disponible`, `reservado`, `vendido`, `anulado`.\nPUT: disponible/reservado/vendido.\nDELETE: anula un cartón vendido.",
+			"item": [
+				{
+					"name": "Crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organizacionId\": {{organizacionId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}cartones/crear",
+						"description": "El administrador crea inventario. usuarioId queda null hasta reservar/vender."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar todos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}cartones/listar"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por organización",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}cartones/listar?organizacionId={{organizacionId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "organizacionId", "value": "{{organizacionId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por usuario",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}cartones/listar?usuarioId={{usuarioId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "usuarioId", "value": "{{usuarioId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}cartones/buscar?id={{cartonId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["buscar"],
+							"query": [
+								{ "key": "id", "value": "{{cartonId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar estado",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"vendido\",\n  \"usuarioId\": {{usuarioId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}cartones/actualizar?id={{cartonId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["actualizar"],
+							"query": [
+								{ "key": "id", "value": "{{cartonId}}" }
+							]
+						},
+						"description": "Vender/reservar: estado + usuarioId. Liberar: {\"estado\":\"disponible\"}."
+					},
+					"response": []
+				},
+				{
+					"name": "Anular",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}cartones/eliminar?id={{cartonId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["eliminar"],
+							"query": [
+								{ "key": "id", "value": "{{cartonId}}" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Organizaciones",
+			"item": [
+				{
+					"name": "Crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{organizacionNombre}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}organizaciones/crear"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}organizaciones/listar"
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}organizaciones/buscar?id={{organizacionId}}",
+							"host": ["{{base_url}}organizaciones"],
+							"path": ["buscar"],
+							"query": [
+								{ "key": "id", "value": "{{organizacionId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{organizacionNombre}}\",\n  \"estado\": \"activo\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}organizaciones/actualizar?id={{organizacionId}}",
+							"host": ["{{base_url}}organizaciones"],
+							"path": ["actualizar"],
+							"query": [
+								{ "key": "id", "value": "{{organizacionId}}" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Usuarios",
+			"description": "Usuarios multi-tenant. Correo y celular únicos por organización. password opcional al crear (mín. 6).",
+			"item": [
+				{
+					"name": "Crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ciudadId\": {{ciudadId}},\n  \"nombre\": \"{{usuarioNombre}}\",\n  \"apellido\": \"{{usuarioApellido}}\",\n  \"celular\": \"{{usuarioCelular}}\",\n  \"correo\": \"{{usuarioCorreo}}\",\n  \"rol\": \"{{usuarioRol}}\",\n  \"password\": \"{{password}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}usuarios/crear",
+						"description": "organizacionId y ciudadId van como números JSON. password no vuelve en la respuesta."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar todos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}usuarios/listar"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por organización",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}usuarios/listar?organizacionId={{organizacionId}}",
+							"host": ["{{base_url}}usuarios"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "organizacionId", "value": "{{organizacionId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}usuarios/buscar?id={{usuarioId}}",
+							"host": ["{{base_url}}usuarios"],
+							"path": ["buscar"],
+							"query": [
+								{ "key": "id", "value": "{{usuarioId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apellido\": \"{{usuarioApellido}}\",\n  \"estado\": \"activo\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}usuarios/actualizar?id={{usuarioId}}",
+							"host": ["{{base_url}}usuarios"],
+							"path": ["actualizar"],
+							"query": [
+								{ "key": "id", "value": "{{usuarioId}}" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ciudades",
+			"description": "Catálogo de solo lectura para el select del front.",
+			"item": [
+				{
+					"name": "Listar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}ciudades/listar"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Partidas",
+			"description": "Enfoque A: al crear la partida se generan N cartones con partidaId.\norganizacionId y operadorId salen del JWT (mesa: administrador|operador).\nEstados: pendiente, en_curso, finalizada, cancelada.",
+			"item": [
+				{
+					"name": "Crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Bingo navideño\",\n  \"numero\": 2,\n  \"fecha\": \"2026-12-20 20:00:00\",\n  \"precioCarton\": 50000,\n  \"cantidadCartones\": 10,\n  \"modalidades\": [\n    { \"modalidad\": \"linea\", \"premio\": 1000000 },\n    { \"modalidad\": \"equis\", \"premio\": 5000000 },\n    { \"modalidad\": \"completa\", \"premio\": 20000000 }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}partidas/crear",
+						"description": "Crea la partida en estado pendiente y genera cantidadCartones disponibles."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar todos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}partidas/listar"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por organización",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}partidas/listar?organizacionId={{organizacionId}}",
+							"host": ["{{base_url}}partidas"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "organizacionId", "value": "{{organizacionId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}partidas/buscar?id={{partidaId}}",
+							"host": ["{{base_url}}partidas"],
+							"path": ["buscar"],
+							"query": [
+								{ "key": "id", "value": "{{partidaId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar cartones de la partida",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}cartones/listar?partidaId={{partidaId}}",
+							"host": ["{{base_url}}cartones"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "partidaId", "value": "{{partidaId}}" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Iniciar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partidaId\": {{partidaId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}partidas/iniciar",
+						"description": "pendiente → en_curso. Requisito para sacar balotas."
+					},
+					"response": []
+				},
+				{
+					"name": "Finalizar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partidaId\": {{partidaId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}partidas/finalizar"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Balotas",
+			"description": "Balotas 1–75 sin repetir. Solo con partida en_curso.",
+			"item": [
+				{
+					"name": "Sacar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partidaId\": {{partidaId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}balotas/sacar"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}balotas/listar?partidaId={{partidaId}}",
+							"host": ["{{base_url}}balotas"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "partidaId", "value": "{{partidaId}}" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ventas",
+			"description": "Canales: manual_operador, openpay_pse (próximo), comprobante (próximo).\nVenta manual crea pago aprobado + cartón vendido + cartonesConfirmados++.",
+			"item": [
+				{
+					"name": "Venta manual",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cartonId\": {{cartonId}},\n  \"usuarioId\": {{usuarioId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}ventas/manual",
+						"description": "usuarioId = comprador. Operador = JWT (mesa). Monto = precioCarton de la partida."
+					},
+					"response": []
+				},
+				{
+					"name": "Iniciar PSE (OpenPay)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cartonId\": {{cartonId}},\n  \"redirectUrl\": \"https://bingo.local/pago-ok\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}ventas/pse",
+						"description": "Reserva el cartón, crea pago openpay_pse pendiente y devuelve pse.url para redirigir al banco.\nDocs: charges method=bank_account + webhooks charge.succeeded/failed."
+					},
+					"response": []
+				},
+				{
+					"name": "Webhook OpenPay",
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{ "key": "username", "value": "{{openpayWebhookUser}}", "type": "string" },
+								{ "key": "password", "value": "{{openpayWebhookPass}}", "type": "string" }
+							]
+						},
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"charge.succeeded\",\n  \"event_date\": \"2026-10-27T18:00:00-05:00\",\n  \"transaction\": {\n    \"id\": \"tr_ejemplo\",\n    \"method\": \"bank_account\",\n    \"status\": \"completed\",\n    \"order_id\": \"bingo-pago-{{pagoId}}\",\n    \"amount\": 5000,\n    \"currency\": \"COP\"\n  }\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}ventas/webhook-openpay",
+						"description": "URL a registrar en Dashboard OpenPay. Basic Auth = OPENPAY_WEBHOOK_USER/PASS.\nTambién acepta type=verification con verification_code."
+					},
+					"response": []
+				},
+				{
+					"name": "Subir comprobante",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "cartonId", "value": "{{cartonId}}", "type": "text" },
+								{ "key": "comprobante", "type": "file", "src": [] }
+							]
+						},
+						"url": "{{base_url}}ventas/comprobante",
+						"description": "form-data: cartonId + comprobante (JPG/PNG/WEBP ≤ 5MB). Jugador = JWT.\nCartón → reservado. Pago → pendiente. Guarda URL en comprobanteUrl."
+					},
+					"response": []
+				},
+				{
+					"name": "Aprobar comprobante",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pagoId\": {{pagoId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}ventas/aprobar-comprobante",
+						"description": "Pago aprobado + cartón vendido + cartonesConfirmados++."
+					},
+					"response": []
+				},
+				{
+					"name": "Rechazar comprobante",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pagoId\": {{pagoId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}ventas/rechazar-comprobante",
+						"description": "Pago rechazado + cartón liberado (disponible)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Push",
+			"description": "Web Push PWA. VAPID pública sin auth; suscribir/desuscribir con Bearer.",
+			"item": [
+				{
+					"name": "VAPID pública",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}push/vapid-publica"
+					},
+					"response": []
+				},
+				{
+					"name": "Suscribir",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/ejemplo\",\n  \"keys\": { \"p256dh\": \"...\", \"auth\": \"...\" }\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}push/suscribir"
+					},
+					"response": []
+				},
+				{
+					"name": "Desuscribir",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/ejemplo\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}push/desuscribir"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reclamos",
+			"description": "Cantar bingo (linea / equis / completa). Un ganador activo por modalidad; admin valida en vivo.",
+			"item": [
+				{
+					"name": "Cantar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cartonId\": {{cartonId}},\n  \"modalidad\": \"equis\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}reclamos/cantar",
+						"description": "Jugador canta. Cartón vendido + partida en_curso + patrón válido. Bloquea la modalidad (pendiente)."
+					},
+					"response": []
+				},
+				{
+					"name": "Aprobar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reclamoId\": {{reclamoId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}reclamos/aprobar",
+						"description": "Solo rol administrador. Re-valida el patrón antes de aprobar."
+					},
+					"response": []
+				},
+				{
+					"name": "Rechazar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reclamoId\": {{reclamoId}}\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}reclamos/rechazar",
+						"description": "Rechaza y reabre la modalidad para otro canto."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}reclamos/listar?partidaId={{partidaId}}",
+							"host": ["{{base_url}}reclamos"],
+							"path": ["listar"],
+							"query": [
+								{ "key": "partidaId", "value": "{{partidaId}}" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

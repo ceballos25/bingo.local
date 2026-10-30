@@ -1,0 +1,26 @@
+# Realtime local / VPS: Redis + Centrifugo.
+# No corre dentro de PHP ni en hosting compartido típico.
+# Uso: docker compose up -d
+#
+# PHP publica por HTTP a CENTRIFUGO_API_URL (ver .env-bi).
+# El front se suscribe por WebSocket a CENTRIFUGO_WS_URL.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: bingo-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6.2.3
+    container_name: bingo-centrifugo
+    command: centrifugo -c /centrifugo/config.json
+    volumes:
+      - ./realtime/centrifugo.json:/centrifugo/config.json:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped

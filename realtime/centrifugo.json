@@ -1,0 +1,40 @@
+{
+  "client": {
+    "insecure": true,
+    "allowed_origins": [
+      "*",
+      "https://bingo.local",
+      "http://bingo.local",
+      "http://127.0.0.1:8000"
+    ]
+  },
+  "http_api": {
+    "key": "bingo-local-api-key"
+  },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "partida",
+        "allow_subscribe_for_client": true,
+        "allow_publish_for_client": false,
+        "presence": true,
+        "history_size": 20,
+        "history_ttl": "10m"
+      }
+    ]
+  },
+  "engine": {
+    "type": "redis",
+    "redis": {
+      "address": "redis:6379"
+    }
+  },
+  "admin": {
+    "enabled": true,
+    "password": "bingo-admin",
+    "secret": "bingo-admin-secret"
+  },
+  "log": {
+    "level": "info"
+  }
+}

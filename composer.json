@@ -1,0 +1,18 @@
+{
+    "name": "bingo/virtual",
+    "description": "Bingo Virtual API",
+    "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Cristian Ceballos",
+            "email": "ceballosmarincristiancamilo@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "firebase/php-jwt": "^7.2",
+        "minishlink/web-push": "^11.0",
+        "phpmailer/phpmailer": "^7.1"
+    }
+}

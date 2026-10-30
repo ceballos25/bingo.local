@@ -1,0 +1,16 @@
+---
+description: Arquitectura por capas y rutas de Bingo Virtual
+alwaysApply: true
+---
+
+# Arquitectura de Bingo Virtual
+
+La referencia del proyecto es `README.md`. Seguirla antes de añadir módulos o cambiar el enrutamiento.
+
+- Capas: Entity, Repository, Service, DTO, Controller. `public/index.php` solo crea dependencias y elige recurso, método y acción.
+- Rutas: `/{recurso}/{accion}`. Ejemplo: `GET /cartones/listar`, `GET /cartones/buscar?id=1`, `POST /cartones/crear`.
+- Un recurso nuevo repite cartones: entidad, repositorio, servicio, DTO, controlador y registro en `index.php`. No crear carpetas físicas en `public/`.
+- PHP nativo, PDO y consultas preparadas. Sin frameworks ni `declare(strict_types=1)`. Sin carpeta `app/exception`.
+- No poner SQL ni reglas de negocio en el punto de entrada. AuthGuard: identidad y org desde JWT.
+- No mover ni exponer `~/websites/.env-bi`.
+- Cambios pequeños. No reescribir módulos que ya funcionan.
