@@ -104,7 +104,8 @@ try {
         $usuario_repository,
         $reclamo_repository,
         $partida_realtime,
-        $mesa_estado_service
+        $mesa_estado_service,
+        $partida_service
     );
     $balota_controller = new BalotaController($balota_service);
 

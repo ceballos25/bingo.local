@@ -14,7 +14,7 @@ export async function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) {
     return null;
   }
-  const reg = await navigator.serviceWorker.register('./sw.js?v=233', { scope: './' });
+  const reg = await navigator.serviceWorker.register('./sw.js?v=237', { scope: './' });
 
   // Al activarse un SW nuevo, una sola recarga para tomar el HTML/JS frescos.
   if (navigator.serviceWorker.controller) {

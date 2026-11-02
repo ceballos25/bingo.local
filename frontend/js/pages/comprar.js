@@ -266,7 +266,16 @@ export async function renderComprar(root, partidaId) {
   try {
     await loadPage(true);
   } catch (e) {
-    toast(e.message || 'Error al cargar');
-    root.innerHTML = `<div class="alert alert-danger mb-0" role="alert">${escapeHtml(e.message)}</div>`;
+    const msg = e.message || 'Error al cargar';
+    const cerrada = /ya no está a la venta|finaliz|cancelad/i.test(msg);
+    if (cerrada) {
+      root.innerHTML = emptyHtml(
+        'Este bingo ya se jugó o no está a la venta.',
+        '<a class="btn btn-success" href="#/landing"><i class="bi bi-calendar-event me-1" aria-hidden="true"></i>Ver bingos abiertos</a>'
+      );
+      return;
+    }
+    toast(msg);
+    root.innerHTML = `<div class="alert alert-danger mb-0" role="alert">${escapeHtml(msg)}</div>`;
   }
 }

@@ -49,11 +49,22 @@ final class CartonController
         try {
             if ($partidaId !== false && $partidaId !== null) {
                 $cartones = $this->service->listarPorPartida($partidaId);
+                $orgId = AuthContext::organizacionId();
                 $cartones = array_values(array_filter(
                     $cartones,
                     static fn (array $c): bool => (int) ($c['organizacionId'] ?? 0)
-                        === AuthContext::organizacionId()
+                        === $orgId
                 ));
+
+                // Jugador: solo sus cartones (no los de otros en la misma partida).
+                if (AuthContext::rol() === 'jugador') {
+                    $usuarioId = AuthContext::id();
+                    $cartones = array_values(array_filter(
+                        $cartones,
+                        static fn (array $c): bool => (int) ($c['usuarioId'] ?? 0)
+                            === $usuarioId
+                    ));
+                }
             } elseif (AuthContext::rol() === 'jugador') {
                 $cartones = $this->service->listarPorUsuario(AuthContext::id());
             } else {
@@ -124,6 +135,19 @@ final class CartonController
             if (
                 (int) ($carton['organizacionId'] ?? 0)
                 !== AuthContext::organizacionId()
+            ) {
+                $this->responder(
+                    ['error' => 'Cartón no encontrado.'],
+                    404
+                );
+
+                return;
+            }
+
+            // Jugador no puede leer cartones de otro dueño.
+            if (
+                AuthContext::rol() === 'jugador'
+                && (int) ($carton['usuarioId'] ?? 0) !== AuthContext::id()
             ) {
                 $this->responder(
                     ['error' => 'Cartón no encontrado.'],

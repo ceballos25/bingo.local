@@ -43,7 +43,14 @@ final class BalotaController
                 400
             );
         } catch (Throwable $exception) {
-            error_log($exception->getMessage());
+            error_log(
+                'balotas/sacar: '
+                . $exception->getMessage()
+                . ' @ '
+                . $exception->getFile()
+                . ':'
+                . $exception->getLine()
+            );
 
             $this->responder(
                 ['error' => 'No fue posible sacar la balota.'],

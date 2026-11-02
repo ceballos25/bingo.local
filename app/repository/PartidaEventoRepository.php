@@ -12,15 +12,8 @@ final class PartidaEventoRepository
         string $tipo,
         array $payload
     ): int {
-        $sql = 'INSERT INTO partida_eventos (
-                    partidaId,
-                    tipo,
-                    payload
-                ) VALUES (
-                    :partidaId,
-                    :tipo,
-                    :payload
-                )';
+        $sql = 'INSERT INTO partida_eventos (partidaId, tipo, payload) '
+            . 'VALUES (:partidaId, :tipo, :payload)';
 
         $statement = $this->database->prepare($sql);
 
@@ -41,17 +34,10 @@ final class PartidaEventoRepository
      */
     public function listarDesde(int $partidaId, int $desdeId): array
     {
-        $sql = 'SELECT
-                    id,
-                    partidaId,
-                    tipo,
-                    payload,
-                    creadoEn
-                FROM partida_eventos
-                WHERE partidaId = :partidaId
-                  AND id > :desdeId
-                ORDER BY id ASC
-                LIMIT 100';
+        $sql = 'SELECT id, partidaId, tipo, payload, creadoEn '
+            . 'FROM partida_eventos '
+            . 'WHERE partidaId = :partidaId AND id > :desdeId '
+            . 'ORDER BY id ASC LIMIT 500';
 
         $statement = $this->database->prepare($sql);
 
@@ -89,9 +75,8 @@ final class PartidaEventoRepository
 
     public function ultimoId(int $partidaId): int
     {
-        $sql = 'SELECT COALESCE(MAX(id), 0) AS ultimo
-                FROM partida_eventos
-                WHERE partidaId = :partidaId';
+        $sql = 'SELECT COALESCE(MAX(id), 0) AS ultimo '
+            . 'FROM partida_eventos WHERE partidaId = :partidaId';
 
         $statement = $this->database->prepare($sql);
         $statement->execute(['partidaId' => $partidaId]);

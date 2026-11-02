@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { getToken, requireAuth } from '../auth.js';
+import { getToken, getUsuario, requireAuth } from '../auth.js';
 import { CONFIG } from '../config.js';
 import { loadDaubs, toggleDaub } from '../daubs.js';
 import {
@@ -20,6 +20,7 @@ import {
   marcarBalotaYaVista,
   reproducirSorteo,
 } from '../draw-overlay.js';
+import { bindLiveResume } from '../live-resume.js';
 import {
   escapeHtml,
   mountLiveClock,
@@ -42,8 +43,16 @@ let streamGrande = false;
 let streamConSonido = true;
 let ytPlayer = null;
 let ytApiPromise = null;
+/** Sesión viva activa (para resume al volver a la pestaña). */
+let vivoActivo = false;
+let disposeResume = null;
+let sseRetryTimer = null;
 
 function cerrarSse() {
+  if (sseRetryTimer) {
+    window.clearTimeout(sseRetryTimer);
+    sseRetryTimer = null;
+  }
   if (eventSource) {
     eventSource.close();
     eventSource = null;
@@ -60,6 +69,9 @@ function destroyYtPlayer() {
 }
 
 export function cleanupVivo() {
+  vivoActivo = false;
+  disposeResume?.();
+  disposeResume = null;
   stopLiveClock?.();
   stopLiveClock = null;
   streamGrande = false;
@@ -428,7 +440,12 @@ export async function renderVivo(root, partidaId) {
     ]);
 
     let balotas = normalizarBalotas(balotasRes);
-    const mios = (cartones || []).filter((c) => c.estado === 'vendido');
+    const miId = Number(getUsuario()?.id || 0);
+    const mios = (cartones || []).filter((c) => {
+      if (c.estado !== 'vendido') return false;
+      if (!miId) return true;
+      return Number(c.usuarioId) === miId;
+    });
 
     if (mios.length === 0) {
       root.innerHTML = `
@@ -455,10 +472,12 @@ export async function renderVivo(root, partidaId) {
     }
 
     if (partida.estado !== 'en_curso') {
+      const jugada = partida.estado === 'finalizada';
       root.innerHTML = `
         <div class="alert alert-secondary" role="alert">
-          <div class="fw-semibold mb-1">Esta partida no está en vivo</div>
-          <p class="mb-0 small">Estado: ${escapeHtml(String(partida.estado).replace('_', ' '))}</p>
+          <div class="fw-semibold mb-1">${jugada ? 'Este bingo ya se jugó' : 'Esta partida no está en vivo'}</div>
+          <p class="mb-2 small">Estado: ${escapeHtml(String(partida.estado).replace('_', ' '))}</p>
+          <a class="btn btn-outline-secondary btn-sm" href="#/mis-cartones"><i class="bi bi-grid-3x3-gap me-1" aria-hidden="true"></i>Ver mis cartones</a>
         </div>`;
       return;
     }
@@ -539,6 +558,7 @@ export async function renderVivo(root, partidaId) {
     root.addEventListener('pointerdown', () => unlockAudio(), { once: true });
 
     ctx.repaint();
+    vivoActivo = true;
 
     const token = getToken();
     const sseKey = `bingo_sse_${partidaId}`;
@@ -552,7 +572,23 @@ export async function renderVivo(root, partidaId) {
       }
     }
 
+    async function resyncBalotas() {
+      const balotasRes = await api(
+        '/balotas/listar?partidaId=' + encodeURIComponent(partidaId)
+      );
+      balotas = normalizarBalotas(balotasRes);
+      if (balotas.length) {
+        marcarBalotaYaVista(balotas[balotas.length - 1].numero);
+      }
+      ctx.updateBalotas(false);
+      // Cursor al día: el próximo SSE con desdeId=0 arranca en el último evento.
+      sessionStorage.setItem(sseKey, '0');
+      ultimoEventoId = 0;
+    }
+
     function conectar(desdeId) {
+      if (!vivoActivo) return;
+      cerrarSse();
       const url =
         CONFIG.apiBase +
         '/partidas/eventos?partidaId=' +
@@ -569,8 +605,8 @@ export async function renderVivo(root, partidaId) {
           const data = JSON.parse(ev.data);
           if (data.ultimoEventoId != null) guardarCursor(data.ultimoEventoId);
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
-        } catch (_) {
-          /* ignore */
+        } catch (e) {
+          console.warn('[vivo] mesa', e);
         }
       });
 
@@ -602,10 +638,27 @@ export async function renderVivo(root, partidaId) {
             });
           }
 
+          if (data.partidaFinalizada || data.partida?.estado === 'finalizada') {
+            toast('Partida finalizada', 'success');
+            cerrarSse();
+            setTimeout(() => renderVivo(root, partidaId), 400);
+          }
+
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
         } catch (e) {
-          /* ignore */
+          console.warn('[vivo] balota', e);
         }
+      });
+
+      eventSource.addEventListener('partida_finalizada', (ev) => {
+        try {
+          if (ev.lastEventId) guardarCursor(ev.lastEventId);
+        } catch (e) {
+          console.warn('[vivo] partida_finalizada', e);
+        }
+        toast('Partida finalizada', 'success');
+        cerrarSse();
+        renderVivo(root, partidaId);
       });
 
       // Cantada en vivo → todos los hosts (jugadores) ven/oyen lo mismo
@@ -622,8 +675,8 @@ export async function renderVivo(root, partidaId) {
             await sonarCantar({ reclamoId });
           }
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
-        } catch (_) {
-          /* ignore */
+        } catch (e) {
+          console.warn('[vivo] reclamo', e);
         }
       });
 
@@ -633,11 +686,31 @@ export async function renderVivo(root, partidaId) {
           if (data.reconectarConDesdeId != null) {
             guardarCursor(data.reconectarConDesdeId);
           }
-        } catch (e) {}
-        cerrarSse();
+        } catch (e) {
+          console.warn('[vivo] timeout', e);
+        }
         conectar(ultimoEventoId);
       });
+
+      eventSource.onerror = () => {
+        if (!vivoActivo || !eventSource) return;
+        // CONNECTING = reintento nativo; CLOSED = hay que abrir de nuevo con cursor fresco.
+        if (eventSource.readyState !== EventSource.CLOSED) return;
+        if (sseRetryTimer) window.clearTimeout(sseRetryTimer);
+        sseRetryTimer = window.setTimeout(() => {
+          sseRetryTimer = null;
+          if (!vivoActivo || document.visibilityState === 'hidden') return;
+          conectar(ultimoEventoId);
+        }, 1200);
+      };
     }
+
+    disposeResume?.();
+    disposeResume = bindLiveResume({
+      isActive: () => vivoActivo,
+      resync: resyncBalotas,
+      reconnectLive: () => conectar(0),
+    });
 
     conectar(ultimoEventoId);
   } catch (e) {

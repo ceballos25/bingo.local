@@ -2,7 +2,8 @@
 
 final class PartidaEventosService
 {
-    private const MAX_SEGUNDOS = 25;
+    /** Corto a propósito: cada SSE ocupa un worker PHP; el cliente reconecta solo. */
+    private const MAX_SEGUNDOS = 12;
 
     public function __construct(
         private PartidaRepository $partidaRepository,
@@ -44,6 +45,14 @@ final class PartidaEventosService
 
         ignore_user_abort(false);
         set_time_limit(0);
+
+        // Last-Event-ID del EventSource nativo (reconexión automática del navegador).
+        $headerId = isset($_SERVER['HTTP_LAST_EVENT_ID'])
+            ? (int) $_SERVER['HTTP_LAST_EVENT_ID']
+            : 0;
+        if ($headerId > $desdeId) {
+            $desdeId = $headerId;
+        }
 
         // desdeId=0 → solo en vivo (sin reenviar historial: balotas/cantadas ya vienen del REST).
         // Reconexiones pasan el último id y no pierden eventos.

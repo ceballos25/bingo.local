@@ -105,7 +105,7 @@ export async function renderMisCartones(root) {
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
         <div class="min-w-0">
           <h1 class="h4 mb-0 font-brand">Jugar</h1>
-          <p class="small text-secondary mb-0">Tus cartones · si el bingo ya empezó, toca Jugar</p>
+          <p class="small text-secondary mb-0">Activos arriba · los ya jugados aparecen en gris</p>
         </div>
         <span class="text-secondary small flex-shrink-0">${mios.length}</span>
       </div>

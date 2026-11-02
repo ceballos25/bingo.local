@@ -1,6 +1,7 @@
 /**
  * Sorteo: overlay de revelado + bombo SVG en mesa.
  * Tiempos en CONFIG.sorteo (admin y jugadores alineados).
+ * Cola: si llegan balotas mientras gira, no se pierden; se confirma UI y solo se anima la última.
  */
 import { CONFIG } from './config.js';
 import { renderBalotaHtml } from './balota.js';
@@ -8,6 +9,24 @@ import { sonarBalota, sonarMezcla } from './sound.js';
 
 let sorteoEnCurso = false;
 let ultimaBalotaAnimada = null;
+/** @type {{ balota: object, onDone?: () => void, opts: object }[]} */
+const cola = [];
+/** @type {number[]} */
+let timers = [];
+
+function later(fn, ms) {
+  const id = window.setTimeout(() => {
+    timers = timers.filter((t) => t !== id);
+    fn();
+  }, ms);
+  timers.push(id);
+  return id;
+}
+
+function clearTimers() {
+  timers.forEach((id) => window.clearTimeout(id));
+  timers = [];
+}
 
 export function getUltimaBalotaAnimada() {
   return ultimaBalotaAnimada;
@@ -21,11 +40,25 @@ export function marcarBalotaYaVista(numero) {
 }
 
 export function cleanupDrawOverlay() {
+  clearTimers();
+  while (cola.length) {
+    const item = cola.shift();
+    try {
+      item?.onDone?.();
+    } catch (_) {
+      /* ignore */
+    }
+  }
   document.getElementById('drawOverlay')?.remove();
   const cage = document.getElementById('mesaDomeCage');
   if (cage) {
     cage.classList.remove('bingo-cage--spin');
     cage.style.removeProperty('--cage-spin');
+  }
+  const eject = document.getElementById('mesaDomeEject');
+  if (eject) {
+    eject.classList.remove('bingo-cage__exit--out', 'bingo-cage__exit--rest');
+    eject.innerHTML = '';
   }
   sorteoEnCurso = false;
 }
@@ -95,17 +128,49 @@ function timingSorteo(numero) {
   };
 }
 
+function drenarColaIntermedia() {
+  while (cola.length > 1) {
+    const prev = cola.shift();
+    try {
+      prev?.onDone?.();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+function terminarSorteo(onDone) {
+  sorteoEnCurso = false;
+  try {
+    onDone?.();
+  } catch (e) {
+    console.warn('[sorteo] onDone', e);
+  }
+  drenarColaIntermedia();
+  const next = cola.shift();
+  if (next) {
+    reproducirSorteo(next.balota, next.onDone, next.opts);
+  }
+}
+
 /**
  * Jugador en vivo: siempre overlay a pantalla completa (xl).
  * Mesa: opts.inline → animación en el bombo; si no hay bombo, mismo overlay.
+ * opts.silent → solo marca vista y llama onDone (rehidratación / catch-up).
  *
  * @param {object} balota
  * @param {() => void} [onDone]
- * @param {{ force?: boolean, inline?: boolean }} [opts]
+ * @param {{ force?: boolean, inline?: boolean, silent?: boolean }} [opts]
  */
 export function reproducirSorteo(balota, onDone, opts = {}) {
   const numero = Number(balota?.numero);
   if (!Number.isFinite(numero) || numero <= 0) {
+    onDone?.();
+    return;
+  }
+
+  if (opts.silent) {
+    ultimaBalotaAnimada = numero;
     onDone?.();
     return;
   }
@@ -116,7 +181,16 @@ export function reproducirSorteo(balota, onDone, opts = {}) {
   }
 
   if (sorteoEnCurso) {
-    onDone?.();
+    // No tirar eventos: confirmar UI de las intermedias y animar solo la última.
+    while (cola.length) {
+      const prev = cola.shift();
+      try {
+        prev?.onDone?.();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    cola.push({ balota, onDone, opts });
     return;
   }
 
@@ -132,7 +206,6 @@ export function reproducirSorteo(balota, onDone, opts = {}) {
     return;
   }
 
-  // Jugadores / fallback: mismo giroMs, periodo y holdMs que la mesa
   mostrarReveladoPantalla(balota, numero, onDone, {
     mezclaMs: timing.giroMs,
     holdMs: timing.holdMs,
@@ -175,10 +248,9 @@ function mostrarReveladoPantalla(balota, numero, onDone, timing = {}) {
 
   const revealAt = mezclaMs > 0 ? Math.max(200, Math.floor(mezclaMs * 0.72)) : 80;
 
-  window.setTimeout(() => {
+  later(() => {
     const ejectEl = document.getElementById('drawEject');
     const cageEl = overlay.querySelector('.draw-cage');
-    // Igual que mesa: al caer la balota solo se ve la bola (sin anillo amarillo).
     if (cageEl) {
       cageEl.classList.remove('draw-cage--spin');
       cageEl.remove();
@@ -192,17 +264,16 @@ function mostrarReveladoPantalla(balota, numero, onDone, timing = {}) {
   }, revealAt);
 
   const total = Math.max(mezclaMs, revealAt + 400) + holdMs;
-  window.setTimeout(() => {
+  later(() => {
     overlay.classList.add('draw-overlay--out');
-    window.setTimeout(() => {
+    later(() => {
       overlay.remove();
-      sorteoEnCurso = false;
-      onDone?.();
+      terminarSorteo(onDone);
     }, fadeMs);
   }, total);
 }
 
-/** Mesa: gira el bombo con sonido todo el tiempo; luego balota xl a pantalla completa. */
+/** Mesa: gira el bombo con sonido; luego balota xl a pantalla completa. */
 function animarDomoEnVivo(balota, numero, onDone, timing) {
   const cage = document.getElementById('mesaDomeCage');
   const eject = document.getElementById('mesaDomeEject');
@@ -224,7 +295,7 @@ function animarDomoEnVivo(balota, numero, onDone, timing) {
 
   sonarMezcla(t.giroMs);
 
-  window.setTimeout(() => {
+  later(() => {
     cage.classList.remove('bingo-cage--spin');
     cage.style.removeProperty('--cage-spin');
 

@@ -8,7 +8,8 @@ final class BalotaService
         private UsuarioRepository $usuarioRepository,
         private ReclamoRepository $reclamoRepository,
         private PartidaRealtime $partidaRealtime,
-        private MesaEstadoService $mesaEstadoService
+        private MesaEstadoService $mesaEstadoService,
+        private PartidaService $partidaService
     ) {
     }
 
@@ -25,8 +26,9 @@ final class BalotaService
         $sacadas = $this->balotaRepository->numerosSacados($partidaId);
 
         if (count($sacadas) >= 75) {
+            $this->cerrarPorBalotasAgotadas($partidaId, $operadorId);
             throw new DomainException(
-                'Ya se sacaron las 75 balotas.'
+                'Ya se sacaron las 75 balotas. La partida quedó finalizada.'
             );
         }
 
@@ -37,6 +39,15 @@ final class BalotaService
 
         $id = $this->balotaRepository->guardar($partidaId, $balota, $orden);
 
+        $estadoPartida = (string) $partida['estado'];
+        $partidaFinalizada = false;
+
+        if ($orden >= 75) {
+            $cerrada = $this->cerrarPorBalotasAgotadas($partidaId, $operadorId);
+            $estadoPartida = (string) ($cerrada['estado'] ?? 'finalizada');
+            $partidaFinalizada = true;
+        }
+
         $resultado = [
             'id' => $id,
             'partidaId' => $partidaId,
@@ -45,31 +56,76 @@ final class BalotaService
             'etiqueta' => $balota->etiqueta(),
             'orden' => $orden,
             'restantes' => 75 - $orden,
+            'partidaFinalizada' => $partidaFinalizada,
             'mesa' => $this->mesaEstadoService->snapshot($partidaId),
             'partida' => [
                 'id' => (int) $partida['id'],
                 'nombre' => $partida['nombre'],
-                'estado' => $partida['estado'],
+                'estado' => $estadoPartida,
             ],
         ];
 
-        $this->partidaRealtime->publicar(
-            $partidaId,
-            'balota',
-            [
-                'mesa' => $resultado['mesa'],
-                'balota' => [
-                    'id' => $id,
-                    'numero' => $resultado['numero'],
-                    'letra' => $resultado['letra'],
-                    'etiqueta' => $resultado['etiqueta'],
-                    'orden' => $orden,
-                    'restantes' => $resultado['restantes'],
-                ],
-            ]
-        );
+        try {
+            $this->partidaRealtime->publicar(
+                $partidaId,
+                'balota',
+                [
+                    'mesa' => $resultado['mesa'],
+                    'partidaFinalizada' => $partidaFinalizada,
+                    'partida' => $resultado['partida'],
+                    'balota' => [
+                        'id' => $id,
+                        'numero' => $resultado['numero'],
+                        'letra' => $resultado['letra'],
+                        'etiqueta' => $resultado['etiqueta'],
+                        'orden' => $orden,
+                        'restantes' => $resultado['restantes'],
+                    ],
+                ]
+            );
+        } catch (Throwable $exception) {
+            error_log('balota publish: ' . $exception->getMessage());
+        }
 
         return $resultado;
+    }
+
+    /** Cierra la partida en curso cuando ya no quedan balotas. */
+    private function cerrarPorBalotasAgotadas(int $partidaId, int $operadorId): array
+    {
+        $actual = $this->partidaRepository->buscarPorId($partidaId);
+
+        if ($actual === null) {
+            throw new DomainException('La partida no existe.');
+        }
+
+        if (($actual['estado'] ?? '') === 'finalizada') {
+            return $actual;
+        }
+
+        $cerrada = $this->partidaService->finalizar($partidaId, $operadorId);
+
+        try {
+            $this->partidaRealtime->publicar(
+                $partidaId,
+                'partida_finalizada',
+                [
+                    'motivo' => 'balotas_agotadas',
+                    'partida' => [
+                        'id' => $partidaId,
+                        'estado' => $cerrada['estado'] ?? 'finalizada',
+                        'nombre' => $cerrada['nombre'] ?? ($actual['nombre'] ?? ''),
+                    ],
+                ]
+            );
+        } catch (Throwable $exception) {
+            // La partida ya quedó finalizada; no tumbar el sacar por el fan-out.
+            error_log(
+                'partida_finalizada publish: ' . $exception->getMessage()
+            );
+        }
+
+        return $cerrada;
     }
 
     public function listarPorPartida(int $partidaId): array

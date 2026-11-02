@@ -13,6 +13,7 @@ import {
   reproducirSorteo,
   renderBingoDomeHtml,
 } from '../../draw-overlay.js';
+import { bindLiveResume } from '../../live-resume.js';
 import { unlockAudio, sonarCantar } from '../../sound.js';
 import { celebrarCantada } from '../../celebrate.js';
 import { renderTablero75Html } from '../../tablero75.js';
@@ -37,8 +38,15 @@ let stopLiveClock = null;
 /** @type {{ reclamoId: number, cartonId: number, numeros: object } | null} */
 let revisionActiva = null;
 let mesaValidarOffcanvas = null;
+let mesaVivoActivo = false;
+let disposeMesaResume = null;
+let mesaSseRetryTimer = null;
 
 function cerrarSse() {
+  if (mesaSseRetryTimer) {
+    window.clearTimeout(mesaSseRetryTimer);
+    mesaSseRetryTimer = null;
+  }
   if (eventSource) {
     eventSource.close();
     eventSource = null;
@@ -67,6 +75,9 @@ function cerrarRevisionCantada() {
 }
 
 export function cleanupMesaVivo() {
+  mesaVivoActivo = false;
+  disposeMesaResume?.();
+  disposeMesaResume = null;
   stopLiveClock?.();
   stopLiveClock = null;
   cerrarRevisionCantada();
@@ -380,8 +391,8 @@ export async function renderMesaVivo(root, partidaId) {
           <div class="mesa-vivo-fila" aria-label="Rombo, anteriores y cantadas">
             <section class="mesa-vivo-fila__rombo" aria-label="Bombo">
               ${renderBingoDomeHtml(actual)}
-              <button type="button" class="btn btn-success btn-sm" id="btnSacarBalota" ${mesaBloqueada ? 'disabled' : ''}>
-                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Girar
+              <button type="button" class="btn btn-success btn-sm" id="btnSacarBalota" ${mesaBloqueada || balotas.length >= 75 ? 'disabled' : ''}>
+                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>${balotas.length >= 75 ? 'Sin balotas' : 'Girar'}
               </button>
             </section>
             <section class="mesa-vivo-fila__anteriores" aria-label="Balotas">
@@ -416,6 +427,13 @@ export async function renderMesaVivo(root, partidaId) {
           if (res.mesa?.botonesBloqueados != null) {
             mesaBloqueada = !!res.mesa.botonesBloqueados;
           }
+          const cerrada =
+            !!res.partidaFinalizada ||
+            res.partida?.estado === 'finalizada' ||
+            Number(res.restantes) === 0;
+          if (cerrada) {
+            partida.estado = 'finalizada';
+          }
           if (d) {
             balotas = pushBalota(balotas, {
               ...d,
@@ -428,15 +446,38 @@ export async function renderMesaVivo(root, partidaId) {
               orden: d.orden || balotas.length,
               partidaId: id,
             };
-            reproducirSorteo(payload, () => ctx.repaint(), {
-              force: true,
-              inline: true,
-            });
+            reproducirSorteo(
+              payload,
+              () => {
+                if (cerrada) {
+                  toast('Se sacaron las 75 balotas. Partida finalizada.', 'success');
+                  cleanupMesaVivo();
+                  renderMesaVivo(root, id);
+                  return;
+                }
+                ctx.repaint();
+              },
+              {
+                force: true,
+                inline: true,
+              }
+            );
+          } else if (cerrada) {
+            toast('Se sacaron las 75 balotas. Partida finalizada.', 'success');
+            cleanupMesaVivo();
+            renderMesaVivo(root, id);
           } else {
             ctx.repaint();
           }
         } catch (e) {
-          toast(e.message || 'No se pudo sacar');
+          const msg = e.message || 'No se pudo sacar';
+          if (/75 balotas|finalizada/i.test(msg)) {
+            toast(msg, 'info');
+            cleanupMesaVivo();
+            renderMesaVivo(root, id);
+            return;
+          }
+          toast(msg);
           setButtonBusy(btn, false);
         }
       });
@@ -535,6 +576,7 @@ export async function renderMesaVivo(root, partidaId) {
     mesaBloqueada = reclamos.some((r) => r.estado === 'pendiente');
     root.addEventListener('pointerdown', () => unlockAudio(), { once: true });
     ctx.repaint();
+    mesaVivoActivo = true;
 
     const token = getToken();
     const sseKey = `bingo_sse_${id}`;
@@ -548,7 +590,31 @@ export async function renderMesaVivo(root, partidaId) {
       }
     }
 
+    async function resyncMesa() {
+      const [balotasRes, reclamosRes] = await Promise.all([
+        api('/balotas/listar?partidaId=' + encodeURIComponent(id)),
+        api('/reclamos/listar?partidaId=' + encodeURIComponent(id)).catch(() => ({
+          reclamos: [],
+        })),
+      ]);
+      balotas = normalizarBalotas(balotasRes);
+      if (balotas.length) {
+        marcarBalotaYaVista(balotas[balotas.length - 1].numero);
+      }
+      reclamos = Array.isArray(reclamosRes?.reclamos)
+        ? reclamosRes.reclamos
+        : Array.isArray(reclamosRes)
+          ? reclamosRes
+          : [];
+      mesaBloqueada = reclamos.some((r) => r.estado === 'pendiente');
+      ctx.repaint();
+      sessionStorage.setItem(sseKey, '0');
+      ultimoEventoId = 0;
+    }
+
     function conectar(desdeId) {
+      if (!mesaVivoActivo) return;
+      cerrarSse();
       const url =
         CONFIG.apiBase +
         '/partidas/eventos?partidaId=' +
@@ -565,8 +631,8 @@ export async function renderMesaVivo(root, partidaId) {
           const data = JSON.parse(ev.data);
           if (data.ultimoEventoId != null) guardarCursor(data.ultimoEventoId);
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
-        } catch (_) {
-          /* ignore */
+        } catch (e) {
+          console.warn('[mesa-vivo] mesa', e);
         }
       });
 
@@ -611,8 +677,8 @@ export async function renderMesaVivo(root, partidaId) {
           }
 
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
-        } catch (_) {
-          /* ignore */
+        } catch (e) {
+          console.warn('[mesa-vivo] balota', e);
         }
       });
 
@@ -627,8 +693,8 @@ export async function renderMesaVivo(root, partidaId) {
             mesaBloqueada || reclamos.some((r) => r.estado === 'pendiente');
           ctx.repaint();
           if (ev.lastEventId) guardarCursor(ev.lastEventId);
-        } catch (_) {
-          /* ignore */
+        } catch (e) {
+          console.warn('[mesa-vivo] reclamo', e);
         }
       };
 
@@ -644,8 +710,8 @@ export async function renderMesaVivo(root, partidaId) {
               celebrarCantada(modalidad, { mesa: true, reclamoId });
               await sonarCantar({ reclamoId });
             }
-          } catch (_) {
-            /* ignore */
+          } catch (e) {
+            console.warn('[mesa-vivo] cantada', e);
           }
         })();
         onReclamo(ev);
@@ -653,17 +719,48 @@ export async function renderMesaVivo(root, partidaId) {
       eventSource.addEventListener('reclamo_aprobado', onReclamo);
       eventSource.addEventListener('reclamo_rechazado', onReclamo);
 
+      eventSource.addEventListener('partida_finalizada', (ev) => {
+        try {
+          if (ev.lastEventId) guardarCursor(ev.lastEventId);
+        } catch (e) {
+          console.warn('[mesa-vivo] finalizada', e);
+        }
+        partida.estado = 'finalizada';
+        toast('Partida finalizada', 'success');
+        cleanupMesaVivo();
+        renderMesaVivo(root, id);
+      });
+
       eventSource.addEventListener('timeout', (ev) => {
         try {
           const data = JSON.parse(ev.data);
           if (data.reconectarConDesdeId != null) {
             guardarCursor(data.reconectarConDesdeId);
           }
-        } catch (_) {}
-        cerrarSse();
+        } catch (e) {
+          console.warn('[mesa-vivo] timeout', e);
+        }
         conectar(ultimoEventoId);
       });
+
+      eventSource.onerror = () => {
+        if (!mesaVivoActivo || !eventSource) return;
+        if (eventSource.readyState !== EventSource.CLOSED) return;
+        if (mesaSseRetryTimer) window.clearTimeout(mesaSseRetryTimer);
+        mesaSseRetryTimer = window.setTimeout(() => {
+          mesaSseRetryTimer = null;
+          if (!mesaVivoActivo || document.visibilityState === 'hidden') return;
+          conectar(ultimoEventoId);
+        }, 1200);
+      };
     }
+
+    disposeMesaResume?.();
+    disposeMesaResume = bindLiveResume({
+      isActive: () => mesaVivoActivo,
+      resync: resyncMesa,
+      reconnectLive: () => conectar(0),
+    });
 
     conectar(ultimoEventoId);
   } catch (e) {
